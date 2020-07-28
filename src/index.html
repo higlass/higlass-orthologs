@@ -20,7 +20,7 @@
 Higlass sequence track
 <div style=""></div>
 <div style="margin: auto">
-  <div style="height: 1500px; width: 800px; border: 1px solid black;"
+  <div style="width: 800px; border: 1px solid black;"
        id="development-demo">
   </div>
 </div>
@@ -41,6 +41,35 @@ And some other text
     {
       "tracks": {
         "top": [
+        {
+            "server": "//higlass.io/api/v1",
+            "tilesetUid": "P0PLbQMwTYGy-5uPIQid7A",
+            "uid": "cHMrrJOASYiTrohNsg9AMw",
+            "type": "gene-annotations",
+            "options": {
+              "fontSize": 10,
+              "labelColor": "black",
+              "labelBackgroundColor": "#ffffff",
+              "labelPosition": "hidden",
+              "labelLeftMargin": 0,
+              "labelRightMargin": 0,
+              "labelTopMargin": 0,
+              "labelBottomMargin": 0,
+              "minHeight": 24,
+              "plusStrandColor": "blue",
+              "minusStrandColor": "red",
+              "trackBorderWidth": 0,
+              "trackBorderColor": "black",
+              "showMousePosition": false,
+              "mousePositionColor": "#000000",
+              "geneAnnotationHeight": 16,
+              "geneLabelPosition": "outside",
+              "geneStrandSpacing": 4,
+              "name": "Gene Annotations (hg38)"
+            },
+            "width": 20,
+            "height": 90
+          },
           {
             "server": "http://higlass.io/api/v1",
             "tilesetUid": "NyITQvZsS_mOFNlz5C2LJg",
@@ -60,11 +89,10 @@ And some other text
           {
             "type": "horizontal-orthologs",
             "height": 60,
-            "tilesetUid": "OHJakQICQD6gTD7skx4EWA",
+            "tilesetUid": "P0PLbQMwTYGy-5uPIQid7A",
             "server": "//higlass.io/api/v1",
-            "uid": "OHJakQICQD6gTD7skx4EWA",
+            "uid": "orthologs_20200728",
             "options": {
-              "name": "Gene Annotations (hg19)",
               "fontSize": 10,
               "labelColor": "black",
               "labelBackgroundColor": "#ffffff",
@@ -82,8 +110,9 @@ And some other text
               "mousePositionColor": "#000000",
               "geneAnnotationHeight": 16,
               "geneLabelPosition": "outside",
-              "geneStrandSpacing": 4
-            }
+              "geneStrandSpacing": 4,
+              "name": "Gene Annotations (hg38)"
+            },
           },
           {
             "server": "http://higlass.io/api/v1",
@@ -109,8 +138,8 @@ And some other text
         "gallery": []
       },
       "initialXDomain": [
-        9995,
-        10013
+      11835.769147738536,
+        16930.769065237662
       ],
       "initialYDomain": [
         -2681066463.2605443,
