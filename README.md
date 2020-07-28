@@ -1,1 +1,1 @@
-# higlass-orthologs
+# Gene orthologs for HiGlass
