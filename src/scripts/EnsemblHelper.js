@@ -1,56 +1,112 @@
-
-
 class EnsemblHelper {
-
   constructor() {}
 
-
-  getSpeciesMapping(){
-
+  getSpeciesMapping() {
     const mapping = {};
 
-    mapping['chimp'] = 'pan_troglodytes';
-    mapping['gorilla'] = 'gorilla_gorilla';
-    mapping['macaca_mulatta'] = 'macaca_mulatta';
-    mapping['mouse'] = 'mus_musculus';
-    mapping['guinea pig'] = 'cavia_porcellus';
-    mapping['rabbit'] = 'oryctolagus_cuniculus';
-    mapping['rat'] = 'rattus_norvegicus';
-    mapping['pig'] = 'sus_scrofa';
-    mapping['cow'] = 'bos_taurus';
-    mapping['sheep'] = 'ovis_aries';
-    mapping['horse'] = 'equus_caballus';
-    mapping['dog'] = 'canis_lupus_familiaris';
-    mapping['elephant'] = 'loxodonta_africana';
-    mapping['chicken'] = 'gallus_gallus';
-    mapping['xenopus_tropicalis'] = 'xenopus_tropicalis';
-    mapping['zebrafish'] = 'danio_rerio';
-    mapping['lamprey'] = 'petromyzon_marinus';
+    mapping["human"] = {
+      ensembleId: "homo_sapiens",
+      display: "Human",
+    };
+    mapping["chimp"] = {
+      ensembleId: "pan_troglodytes",
+      display: "Chimpanzee",
+    };
+    mapping["gorilla"] = {
+      ensembleId: "gorilla_gorilla",
+      display: "Gorilla",
+    };
+    mapping["macaca_mulatta"] = {
+      ensembleId: "macaca_mulatta",
+      display: "Rhesus",
+    };
+    mapping["mouse"] = {
+      ensembleId: "mus_musculus",
+      display: "Mouse",
+    };
+    mapping["guinea pig"] = {
+      ensembleId: "cavia_porcellus",
+      display: "Guinea pig",
+    };
+    mapping["rabbit"] = {
+      ensembleId: "oryctolagus_cuniculus",
+      display: "Rabbit",
+    };
+    mapping["rat"] = {
+      ensembleId: "rattus_norvegicus",
+      display: "Rat",
+    };
+    mapping["pig"] = {
+      ensembleId: "sus_scrofa",
+      display: "Pig",
+    };
+    mapping["cow"] = {
+      ensembleId: "bos_taurus",
+      display: "Cow",
+    };
+    mapping["sheep"] = {
+      ensembleId: "ovis_aries",
+      display: "Sheep",
+    };
+    mapping["horse"] = {
+      ensembleId: "equus_caballus",
+      display: "Horse",
+    };
+    mapping["dog"] = {
+      ensembleId: "canis_lupus_familiaris",
+      display: "Dog",
+    };
+    mapping["elephant"] = {
+      ensembleId: "loxodonta_africana",
+      display: "Elephant",
+    };
+    mapping["chicken"] = {
+      ensembleId: "gallus_gallus",
+      display: "Chicken",
+    };
+    mapping["xenopus_tropicalis"] = {
+      ensembleId: "xenopus_tropicalis",
+      display: "Tropical clawed frog",
+    };
+    mapping["zebrafish"] = {
+      ensembleId: "danio_rerio",
+      display: "Zebrafish",
+    };
+    mapping["lamprey"] = {
+      ensembleId: "petromyzon_marinus",
+      display: "Lamprey",
+    };
 
     return mapping;
-
   }
 
-  initializeLabelTexts(settings, Pixilib){
-
-    const labels = Object.keys(this.getSpeciesMapping());
-    const pixiLabels = [];
+  initializeLabelTexts(settings, Pixilib) {
+    const spMapping = this.getSpeciesMapping()
+    const labels = Object.keys(spMapping);
+    const pixiLabels = {};
 
     labels.forEach((label) => {
-      const text = new Pixilib.Text(label, settings);
+      const pixiLabel = {};
+      const text = new Pixilib.Text(spMapping[label].display, settings);
       text.interactive = true;
       text.anchor.x = 0;
       text.anchor.y = 0;
       text.visible = true;
-      pixiLabels.push(text);
-    })
+      pixiLabel["text"] = text;
+      pixiLabel["width"] = text.getBounds().width / 2;
+      pixiLabel["height"] = text.getBounds().height / 2;
+
+      const pixiSprite = new Pixilib.Sprite(text.texture);
+      pixiSprite.width = pixiLabel["width"];
+      pixiSprite.height = pixiLabel["height"];
+
+      pixiLabel["sprite"] = pixiSprite;
+
+      pixiLabels[label] = pixiLabel;
+    });
 
     return pixiLabels;
-
   }
-
-  
- 
 }
 
 export default EnsemblHelper;

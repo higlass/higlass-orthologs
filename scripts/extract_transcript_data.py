@@ -50,7 +50,7 @@ chrms = [i.split('\t')[0] for i in chrsizes]
 for i, v in df.iterrows():
     if i % 5000 == 0:
         print("Progress: ", str(i),"/", str(total_entries))
-    if (v['transcript_id'] in known_canonicals) and (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon'):
+    if (v['gene_type'] == 'protein_coding') and (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon') and (v['transcript_id'] in known_canonicals):
         if v['gene_id'] not in data:
             data[v['gene_id']] = {}
 
@@ -102,7 +102,8 @@ for gene_id, transcripts in data.items():
     importance = random.randint(1,100)
 
     for transcript_id, info in transcripts.items():
-        if info['gene_type'] == 'protein_coding' or info['gene_type'] == 'miRNA':
+        #if info['gene_type'] == 'protein_coding' or info['gene_type'] == 'miRNA':
+        if info['gene_type'] == 'protein_coding':
             if info['chr'] in chrms:
                 exons_start = info['CDSStarts'].split(',')[:-1]
                 exons_start_formated = [int(i) for i in exons_start]
@@ -141,7 +142,8 @@ output = []
 for gene_id, transcripts in data.items():
     for transcript_id, info in transcripts.items():
         
-        if info['gene_type'] == 'protein_coding' or info['gene_type'] == 'miRNA':
+        #if info['gene_type'] == 'protein_coding' or info['gene_type'] == 'miRNA':
+        if info['gene_type'] == 'protein_coding' and info['StartCodonStart'] != '.':
             #print("TRANSCRIPT_ITEM",transcript_id, info)
             if info['chr'] in chrms:
                 if info['gene_id'] not in data_clean:

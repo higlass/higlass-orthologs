@@ -19,12 +19,8 @@ const OrthologsTrack = (HGC, ...args) => {
   const WHITE_HEX = colorToHex("#ffffff");
   const DARKGREY_HEX = colorToHex("#999999");
 
-
-
   class OrthologsTrackClass extends HGC.tracks.HorizontalGeneAnnotationsTrack {
-
     constructor(context, options) {
-
       super(context, options);
 
       const { animate } = context;
@@ -37,11 +33,17 @@ const OrthologsTrack = (HGC, ...args) => {
       this.initOptions();
 
       const ensemblHelper = new EnsemblHelper();
-      ensemblHelper.initializeLabelTexts(this.labelTextOptions, HGC.libraries.PIXI);
+      this.labels = ensemblHelper.initializeLabelTexts(
+        this.labelTextOptions,
+        HGC.libraries.PIXI
+      );
+      this.updateActiveSpecies();
+
+      
     }
 
     initTile(tile) {
-      console.log(tile);
+
       // create texts
       tile.texts = {};
       tile.textWidths = {};
@@ -74,12 +76,9 @@ const OrthologsTrack = (HGC, ...args) => {
         const transcriptId = tsFormatted.transcriptId;
 
         td["transcriptId"] = transcriptId;
-
       });
 
-      
       tile.initialized = true;
-
 
       // We have to rerender everything since the vertical position
       // of the tracks might have changed accross tiles
@@ -108,20 +107,38 @@ const OrthologsTrack = (HGC, ...args) => {
         fontWeight: "bold",
       };
 
-
       this.colors = {};
 
       this.colors["labelFont"] = colorToHex(this.options.fontColor);
       this.colors["black"] = colorToHex("#000000");
-      this.colors["labelBackground"] = colorToHex(
-        this.options.labelColor
-      );
+      this.colors["labelBackground"] = colorToHex(this.options.labelColor);
+      this.colors["+"] = colorToHex(this.options.plusStrandColor);
+      this.colors["-"] = colorToHex(this.options.minusStrandColor);
+    }
+
+    updateActiveSpecies() {
+      const species = this.options.species;
+      this.activeSpecies = [];
+
+      species.forEach((sp, i) => {
+        // only procedd if species is supported
+        if (this.labels[sp]) {
+          const as = {};
+          as["label"] = this.labels[sp];
+          as["species"] = sp;
+          as["yPosOffset"] = i * (this.rowHeight + this.rowSpacing);
+          this.activeSpecies.push(as);
+        }
+      });
+      console.log("ActiveSpecies", this.activeSpecies);
     }
 
     formatTranscriptData(ts) {
       const strand = ts[5];
-      const stopCodonPos = ts[12] === "." ? "." : (strand === "+" ? +ts[12] + 2 : +ts[12] - 1);
-      const startCodonPos = ts[11] === "." ? "." : (strand === "+" ? +ts[11] - 1 : +ts[11] + 2);
+      const stopCodonPos =
+        ts[12] === "." ? "." : strand === "+" ? +ts[12] + 2 : +ts[12] - 1;
+      const startCodonPos =
+        ts[11] === "." ? "." : strand === "+" ? +ts[11] - 1 : +ts[11] + 2;
       const exonStarts = ts[9].split(",").map((x) => +x - 1);
       const exonEnds = ts[10].split(",").map((x) => +x);
       const txStart = +ts[1] - 1;
@@ -174,8 +191,6 @@ const OrthologsTrack = (HGC, ...args) => {
           return +a[1] - b[1];
         })
         .forEach((ts) => {
-
-
           const tsFormatted = this.formatTranscriptData(ts);
 
           const tInfo = {
@@ -196,7 +211,6 @@ const OrthologsTrack = (HGC, ...args) => {
         });
 
       this.numTranscriptRows = Object.keys(this.transcriptPositionInfo).length;
-
     }
 
     /*
@@ -215,6 +229,8 @@ const OrthologsTrack = (HGC, ...args) => {
 
       this.updateTranscriptInfo();
 
+      this.drawLabels();
+
       // Adjusting the track height leads to a full rerender.
       // No need to rerender again
 
@@ -230,12 +246,12 @@ const OrthologsTrack = (HGC, ...args) => {
         this.tilesetInfo,
         tile.tileId
       );
-  
+
       tile.rectMaskGraphics.clear();
-  
+
       const randomColor = Math.floor(Math.random() * 16 ** 6);
       tile.rectMaskGraphics.beginFill(randomColor, 0.3);
-  
+
       const x = this._xScale(tileX);
       const y = 0;
       const width = this._xScale(tileX + tileWidth) - this._xScale(tileX);
@@ -244,7 +260,7 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     renderTile(tile) {
-      console.log("renderTile");
+
       if (!tile.initialized) return;
 
       // store the scale at while the tile was drawn at so that
@@ -254,25 +270,18 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.rectGraphics.clear();
       tile.labelBgGraphics.clear();
 
-
-      const renderContext = [
-        this,
-        tile,
-        this.rowHeight,
-        this.rowSpacing,
-      ];
+      //const renderContext = [this, tile, this.rowHeight, this.rowSpacing];
 
       //console.log(tile.tileData);
 
-      // renderTranscriptExons(tile.tileData, ...renderContext);
+      this.renderExons(tile);
 
-      this.drawLabels(tile);
       this.renderMask(tile);
 
-      // trackUtils.stretchRects(this, [
-      //   (x) => x.rectGraphics,
-      //   (x) => x.rectMaskGraphics,
-      // ]);
+      trackUtils.stretchRects(this, [
+        (x) => x.rectGraphics,
+        (x) => x.rectMaskGraphics,
+      ]);
     }
 
     draw() {
@@ -281,25 +290,151 @@ const OrthologsTrack = (HGC, ...args) => {
         (x) => x.rectMaskGraphics,
       ]);
 
-      
-
       // otherwise codons are not displayed on startup
       requestAnimationFrame(this.animate);
     }
 
-    drawLabels(tile) {
+    renderExons(tile){
 
-      const text = new HGC.libraries.PIXI.Text("Chicken", this.labelTextOptions);
-      text.interactive = true;
+      // get the bounds of the tile
+      const tileId = +tile.tileId.split(".")[1];
+      const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
+      const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
+      const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
+      const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
 
-      text.anchor.x = 0;
-      text.anchor.y = 0;
-      text.visible = true;
-      tile.labelGraphics.addChild(text);
+      const transcripts = tile.tileData;
+      console.log(tile)
+
+      transcripts.forEach((transcript) => {
+        const transcriptInfo = transcript.fields;
+        const chrOffset = +transcript.chrOffset;
+  
+        const transcriptId = this.transcriptId(transcriptInfo);
+  
+        const exonStarts = this.transcriptInfo[transcriptId]["exonStarts"];
+        const exonEnds = this.transcriptInfo[transcriptId]["exonEnds"];
+
+        const strand = this.transcriptInfo[transcriptId]["strand"];
+  
+        const isProteinCoding = this.transcriptInfo[transcriptId]["startCodonPos"] !== "." && this.transcriptInfo[transcriptId]["stopCodonPos"] !== ".";
+  
+        if(!isProteinCoding){
+          return;
+        }
+  
+        const startCodonPos = this.transcriptInfo[transcriptId]["startCodonPos"] + chrOffset;
+        const stopCodonPos = this.transcriptInfo[transcriptId]["stopCodonPos"] + chrOffset;
+  
+        const txStart = this.transcriptInfo[transcriptId]["txStart"] + chrOffset;
+        const txEnd = this.transcriptInfo[transcriptId]["txEnd"] + chrOffset;
+  
+        let exonOffsetStarts = exonStarts.map((x) => +x + chrOffset);
+        let exonOffsetEnds = exonEnds.map((x) => +x + chrOffset);
+
+        // Add start and stop codon to the exon list and distingush between UTR and coding region later
+        exonOffsetStarts.push(startCodonPos, stopCodonPos);
+        exonOffsetEnds.push(startCodonPos, stopCodonPos);
+
+        exonOffsetStarts.sort();
+        exonOffsetEnds.sort();
+
+        const xStartPos = this._xScale(txStart);
+        const xEndPos = this._xScale(txEnd);
+
+        const rectHeight = this.activeSpecies.length * (this.rowHeight + this.rowSpacing);
+       
+        // draw the actual exons
+        for (let j = 0; j < exonOffsetStarts.length; j++) {
+          const exonStart = exonOffsetStarts[j];
+          const exonEnd = exonOffsetEnds[j];
+
+          // if the exon has no overlap with the tile, go on
+          if (exonEnd < tileMinX || exonStart > tileMaxX) {
+            continue;
+          }
+
+          const isUtr =
+            (strand === "+" &&
+              (exonEnd <= startCodonPos || exonStart >= stopCodonPos)) ||
+            (strand === "-" &&
+              (exonStart >= startCodonPos || exonEnd <= stopCodonPos));
+          
+          if (isUtr) {
+            continue;
+          }
+
+          const colorUsed = this.colors[strand];
+          
+          tile.rectGraphics.beginFill(colorUsed);
+          tile.rectGraphics.beginFill(colorUsed);
+          const xStart = this._xScale(exonStart);
+          const localWidth = Math.max(
+            1,
+            this._xScale(exonEnd) - this._xScale(exonStart)
+          );
+
+          let minX = xStartPos;
+          let maxX = xEndPos;
+
+          const rectStartX = strand === "+" ?  Math.min(xStart, maxX) : Math.max(xStart, minX);
+          const rectEndX = strand === "+" ? Math.min(xStart + localWidth, maxX) : Math.max(xStart + localWidth, minX);
+          const localRect = [rectStartX, 0, rectEndX - rectStartX, this.rowHeight + this.rowSpacing];
+          console.log(localRect)
+           
+          tile.rectGraphics.drawRect(rectStartX, 0, rectEndX - rectStartX, rectHeight);
+
+
+         
+        }
+  
+      
+      });
+
+      
+
+      
+
     }
 
-     /** cleanup */
-     destroyTile(tile) {
+
+    drawLabels() {
+      this.pForeground.clear();
+      this.pForeground.removeChildren();
+      let maxLabelWidth = 0;
+
+      this.activeSpecies.forEach((sp) => {
+        maxLabelWidth = Math.max(maxLabelWidth, sp.label.width);
+      });
+
+      this.pForeground.beginFill(WHITE_HEX);
+      this.pForeground.drawRect(
+        0,
+        0,
+        maxLabelWidth+2,
+        this.activeSpecies.length * (this.rowHeight + this.rowSpacing)
+      );
+
+
+      this.activeSpecies.forEach((sp, i) => {
+        const sprite = sp.label.sprite;
+        sprite.position.x = 0;
+        sprite.position.y = sp.yPosOffset + this.rowSpacing/2;
+
+        this.pForeground.addChild(sprite);
+
+        this.pForeground.drawRect(
+          0,
+          (i+1)*(this.rowHeight + this.rowSpacing),
+          this.dimensions[0],
+          1
+        );
+
+      });
+    }
+
+    /** cleanup */
+    destroyTile(tile) {
       tile.rectGraphics.destroy();
       tile.rectMaskGraphics.destroy();
       tile.labelGraphics.removeChildren();
@@ -329,12 +464,9 @@ const OrthologsTrack = (HGC, ...args) => {
       return zoomLevel;
     }
 
-    getMouseOverHtml(trackX, trackY){
+    getMouseOverHtml(trackX, trackY) {
       return "";
     }
-
-
-
   }
   return new OrthologsTrackClass(...args);
 };
@@ -361,6 +493,9 @@ OrthologsTrack.config = {
     "fontColor",
     "rowHeight",
     "rowSpacing",
+    "species",
+    "plusStrandColor",
+    "minusStrandColor",
   ],
   defaultOptions: {
     labelColor: "black",
@@ -373,6 +508,17 @@ OrthologsTrack.config = {
     fontColor: "white",
     rowHeight: 10,
     rowSpacing: 2,
+    species: [
+      "human",
+      "macaca_mulatta",
+      "mouse",
+      "dog",
+      "elephant",
+      "chicken",
+      "zebrafish",
+    ],
+    plusStrandColor: "#bdbfff",
+    minusStrandColor: "#fabec2",
   },
 };
 
