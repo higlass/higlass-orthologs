@@ -38,12 +38,9 @@ const OrthologsTrack = (HGC, ...args) => {
         HGC.libraries.PIXI
       );
       this.updateActiveSpecies();
-
-      
     }
 
     initTile(tile) {
-
       // create texts
       tile.texts = {};
       tile.textWidths = {};
@@ -112,8 +109,10 @@ const OrthologsTrack = (HGC, ...args) => {
       this.colors["labelFont"] = colorToHex(this.options.fontColor);
       this.colors["black"] = colorToHex("#000000");
       this.colors["labelBackground"] = colorToHex(this.options.labelColor);
-      this.colors["+"] = colorToHex(this.options.plusStrandColor);
-      this.colors["-"] = colorToHex(this.options.minusStrandColor);
+      this.colors["+1"] = colorToHex(this.options.plusStrandColor1);
+      this.colors["+2"] = colorToHex(this.options.plusStrandColor2);
+      this.colors["-1"] = colorToHex(this.options.minusStrandColor1);
+      this.colors["-2"] = colorToHex(this.options.minusStrandColor2);
     }
 
     updateActiveSpecies() {
@@ -130,7 +129,7 @@ const OrthologsTrack = (HGC, ...args) => {
           this.activeSpecies.push(as);
         }
       });
-      console.log("ActiveSpecies", this.activeSpecies);
+      //console.log("ActiveSpecies", this.activeSpecies);
     }
 
     formatTranscriptData(ts) {
@@ -168,12 +167,15 @@ const OrthologsTrack = (HGC, ...args) => {
     drawTile() {}
 
     updateTranscriptInfo() {
+      console.log("updateTranscriptInfo");
       // get all visible transcripts
       const visibleTranscriptsObj = {};
+      const chrOffsets = {};
 
       this.visibleAndFetchedTiles().forEach((tile) => {
         tile.tileData.forEach((ts) => {
           visibleTranscriptsObj[ts.transcriptId] = ts.fields;
+          chrOffsets[ts.transcriptId] = +ts.chrOffset;
         });
       });
 
@@ -183,15 +185,19 @@ const OrthologsTrack = (HGC, ...args) => {
       }
 
       this.transcriptInfo = {};
-      this.transcriptPositionInfo = {};
 
-      this.numTranscriptRows = 0;
       visibleTranscripts
         .sort(function (a, b) {
           return +a[1] - b[1];
         })
         .forEach((ts) => {
           const tsFormatted = this.formatTranscriptData(ts);
+          const chrOffset = chrOffsets[tsFormatted.transcriptId];
+
+          const codonStartsAndLengths = this.calculateCodonPositions(
+            tsFormatted,
+            chrOffset
+          );
 
           const tInfo = {
             transcriptId: tsFormatted.transcriptId,
@@ -206,11 +212,97 @@ const OrthologsTrack = (HGC, ...args) => {
             startCodonPos: tsFormatted.startCodonPos,
             stopCodonPos: tsFormatted.stopCodonPos,
             importance: tsFormatted.importance,
+            codonStartsAndLengths: codonStartsAndLengths,
           };
           this.transcriptInfo[tInfo.transcriptId] = tInfo;
         });
+    }
 
-      this.numTranscriptRows = Object.keys(this.transcriptPositionInfo).length;
+    calculateCodonPositions(ts, chrOffset) {
+      const exonStarts = ts["exonStarts"];
+      const exonEnds = ts["exonEnds"];
+      const strand = ts["strand"];
+      const codonStartsAndLengths = [];
+
+      const isProteinCoding =
+        ts["startCodonPos"] !== "." && ts["stopCodonPos"] !== ".";
+
+      if (!isProteinCoding) {
+        return [];
+      }
+
+      if (strand === "-") {
+        return [];
+      }
+
+      const startCodonPos = ts["startCodonPos"] + chrOffset;
+      const stopCodonPos = ts["stopCodonPos"] + chrOffset;
+
+      const txStart = ts["txStart"] + chrOffset;
+      const txEnd = ts["txEnd"] + chrOffset;
+
+      let exonOffsetStarts = exonStarts.map((x) => +x + chrOffset);
+      let exonOffsetEnds = exonEnds.map((x) => +x + chrOffset);
+
+      // Add start and stop codon to the exon list and distingush between UTR and coding region later
+      exonOffsetStarts.push(startCodonPos, stopCodonPos);
+      exonOffsetEnds.push(startCodonPos, stopCodonPos);
+
+      exonOffsetStarts.sort();
+      exonOffsetEnds.sort();
+      console.log(exonOffsetStarts);
+
+      // We want to assign each codon the correct position in the genome. Since
+      // they can be split between exons, we have to keep track how they are psoitioned
+      // across exons
+      let codonLengthCorrection = 0;
+      let nextCodonLength = 3;
+      // We assume that we have an array with AAs that we need to assignt o these gene coordinated.
+      // Since they can appear twice, we have to keep track when this happens
+      let codonId = 0;
+
+      for (let j = 0; j < exonOffsetStarts.length; j++) {
+        const exonStart = exonOffsetStarts[j];
+        const exonEnd = exonOffsetEnds[j];
+
+        const isUtr =
+          (strand === "+" &&
+            (exonEnd <= startCodonPos || exonStart >= stopCodonPos)) ||
+          (strand === "-" &&
+            (exonStart >= startCodonPos || exonEnd <= stopCodonPos));
+
+        if (isUtr) {
+          continue;
+        }
+
+        for (let k = exonStart; k < exonEnd; k = k + nextCodonLength) {
+          const codonStart = k;
+
+          let codonStartAndLength = null;
+
+          if (codonLengthCorrection !== 0) {
+            nextCodonLength = codonLengthCorrection;
+            codonLengthCorrection = 0;
+            codonStartAndLength = [codonStart, nextCodonLength, codonId];
+            codonId += 1;
+          } else if (codonStart + nextCodonLength > exonEnd) {
+            nextCodonLength = exonEnd - codonStart;
+            codonLengthCorrection = 3 - nextCodonLength;
+            codonStartAndLength = [codonStart, exonEnd - codonStart, codonId];
+
+            nextCodonLength = codonLengthCorrection;
+          } else {
+            nextCodonLength = 3;
+            codonLengthCorrection = 0;
+            codonStartAndLength = [codonStart, nextCodonLength, codonId];
+            codonId += 1;
+          }
+
+          codonStartsAndLengths.push(codonStartAndLength);
+        }
+      }
+
+      return codonStartsAndLengths;
     }
 
     /*
@@ -218,7 +310,7 @@ const OrthologsTrack = (HGC, ...args) => {
      * changed
      */
     rerender(options, force) {
-      console.log("rerender");
+      //console.log("rerender");
       const strOptions = JSON.stringify(options);
       if (!force && strOptions === this.prevOptions) return;
 
@@ -260,7 +352,6 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     renderTile(tile) {
-
       if (!tile.initialized) return;
 
       // store the scale at while the tile was drawn at so that
@@ -294,8 +385,7 @@ const OrthologsTrack = (HGC, ...args) => {
       requestAnimationFrame(this.animate);
     }
 
-    renderExons(tile){
-
+    renderExons(tile) {
       // get the bounds of the tile
       const tileId = +tile.tileId.split(".")[1];
       const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
@@ -304,31 +394,36 @@ const OrthologsTrack = (HGC, ...args) => {
       const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
 
       const transcripts = tile.tileData;
-      console.log(tile)
+      //console.log(tile)
 
       transcripts.forEach((transcript) => {
         const transcriptInfo = transcript.fields;
         const chrOffset = +transcript.chrOffset;
-  
+
         const transcriptId = this.transcriptId(transcriptInfo);
-  
+
         const exonStarts = this.transcriptInfo[transcriptId]["exonStarts"];
         const exonEnds = this.transcriptInfo[transcriptId]["exonEnds"];
 
         const strand = this.transcriptInfo[transcriptId]["strand"];
-  
-        const isProteinCoding = this.transcriptInfo[transcriptId]["startCodonPos"] !== "." && this.transcriptInfo[transcriptId]["stopCodonPos"] !== ".";
-  
-        if(!isProteinCoding){
+
+        const isProteinCoding =
+          this.transcriptInfo[transcriptId]["startCodonPos"] !== "." &&
+          this.transcriptInfo[transcriptId]["stopCodonPos"] !== ".";
+
+        if (!isProteinCoding) {
           return;
         }
-  
-        const startCodonPos = this.transcriptInfo[transcriptId]["startCodonPos"] + chrOffset;
-        const stopCodonPos = this.transcriptInfo[transcriptId]["stopCodonPos"] + chrOffset;
-  
-        const txStart = this.transcriptInfo[transcriptId]["txStart"] + chrOffset;
+
+        const startCodonPos =
+          this.transcriptInfo[transcriptId]["startCodonPos"] + chrOffset;
+        const stopCodonPos =
+          this.transcriptInfo[transcriptId]["stopCodonPos"] + chrOffset;
+
+        const txStart =
+          this.transcriptInfo[transcriptId]["txStart"] + chrOffset;
         const txEnd = this.transcriptInfo[transcriptId]["txEnd"] + chrOffset;
-  
+
         let exonOffsetStarts = exonStarts.map((x) => +x + chrOffset);
         let exonOffsetEnds = exonEnds.map((x) => +x + chrOffset);
 
@@ -342,61 +437,78 @@ const OrthologsTrack = (HGC, ...args) => {
         const xStartPos = this._xScale(txStart);
         const xEndPos = this._xScale(txEnd);
 
-        const rectHeight = this.activeSpecies.length * (this.rowHeight + this.rowSpacing);
-       
+        const rectHeight =
+          this.activeSpecies.length * (this.rowHeight + this.rowSpacing);
+
+        const color1 = this.colors[strand + "1"];
+        tile.rectGraphics.beginFill(color1);
+
         // draw the actual exons
         for (let j = 0; j < exonOffsetStarts.length; j++) {
           const exonStart = exonOffsetStarts[j];
           const exonEnd = exonOffsetEnds[j];
 
           // if the exon has no overlap with the tile, go on
-          if (exonEnd < tileMinX || exonStart > tileMaxX) {
-            continue;
-          }
+          if (exonEnd < tileMinX || exonStart > tileMaxX) continue;
 
           const isUtr =
             (strand === "+" &&
               (exonEnd <= startCodonPos || exonStart >= stopCodonPos)) ||
             (strand === "-" &&
               (exonStart >= startCodonPos || exonEnd <= stopCodonPos));
-          
-          if (isUtr) {
-            continue;
-          }
 
-          const colorUsed = this.colors[strand];
-          
-          tile.rectGraphics.beginFill(colorUsed);
-          tile.rectGraphics.beginFill(colorUsed);
+          if (isUtr) continue;
+
           const xStart = this._xScale(exonStart);
           const localWidth = Math.max(
             1,
             this._xScale(exonEnd) - this._xScale(exonStart)
           );
 
-          let minX = xStartPos;
-          let maxX = xEndPos;
+          const rectStartX =
+            strand === "+"
+              ? Math.min(xStart, xEndPos)
+              : Math.max(xStart, xStartPos);
+          const rectEndX =
+            strand === "+"
+              ? Math.min(xStart + localWidth, xEndPos)
+              : Math.max(xStart + localWidth, xStartPos);
 
-          const rectStartX = strand === "+" ?  Math.min(xStart, maxX) : Math.max(xStart, minX);
-          const rectEndX = strand === "+" ? Math.min(xStart + localWidth, maxX) : Math.max(xStart + localWidth, minX);
-          const localRect = [rectStartX, 0, rectEndX - rectStartX, this.rowHeight + this.rowSpacing];
-          console.log(localRect)
-           
-          tile.rectGraphics.drawRect(rectStartX, 0, rectEndX - rectStartX, rectHeight);
-
-
-         
+          tile.rectGraphics.drawRect(
+            rectStartX,
+            0,
+            rectEndX - rectStartX,
+            rectHeight
+          );
         }
-  
-      
+
+        // draw stripes into table
+        const codonStartsAndLengths = this.transcriptInfo[transcriptId][
+          "codonStartsAndLengths"
+        ].filter((entry) => {
+          return (
+            entry[0] >= tileMinX && entry[0] <= tileMaxX && entry[2] % 2 === 0
+          );
+        });
+        console.log(codonStartsAndLengths);
+        const color2 = this.colors[strand + "2"];
+        tile.rectGraphics.beginFill(color2);
+
+        for (let j = 0; j < codonStartsAndLengths.length; j++) {
+          const codonStart = codonStartsAndLengths[j][0];
+          const codonLength = codonStartsAndLengths[j][1];
+          const codonEnd = codonStart + codonLength;
+
+          const xStart = this._xScale(codonStart);
+          const localWidth = Math.max(
+            1,
+            this._xScale(codonEnd) - this._xScale(codonStart)
+          );
+
+          tile.rectGraphics.drawRect(xStart, 0, localWidth, rectHeight);
+        }
       });
-
-      
-
-      
-
     }
-
 
     drawLabels() {
       this.pForeground.clear();
@@ -411,25 +523,23 @@ const OrthologsTrack = (HGC, ...args) => {
       this.pForeground.drawRect(
         0,
         0,
-        maxLabelWidth+2,
+        maxLabelWidth + 2,
         this.activeSpecies.length * (this.rowHeight + this.rowSpacing)
       );
-
 
       this.activeSpecies.forEach((sp, i) => {
         const sprite = sp.label.sprite;
         sprite.position.x = 0;
-        sprite.position.y = sp.yPosOffset + this.rowSpacing/2;
+        sprite.position.y = sp.yPosOffset + this.rowSpacing / 2;
 
         this.pForeground.addChild(sprite);
 
         this.pForeground.drawRect(
           0,
-          (i+1)*(this.rowHeight + this.rowSpacing),
+          (i + 1) * (this.rowHeight + this.rowSpacing),
           this.dimensions[0],
           1
         );
-
       });
     }
 
@@ -494,8 +604,10 @@ OrthologsTrack.config = {
     "rowHeight",
     "rowSpacing",
     "species",
-    "plusStrandColor",
-    "minusStrandColor",
+    "plusStrandColor1",
+    "plusStrandColor2",
+    "minusStrandColor1",
+    "minusStrandColor2",
   ],
   defaultOptions: {
     labelColor: "black",
@@ -517,8 +629,10 @@ OrthologsTrack.config = {
       "chicken",
       "zebrafish",
     ],
-    plusStrandColor: "#bdbfff",
-    minusStrandColor: "#fabec2",
+    plusStrandColor1: "#ebebff",
+    plusStrandColor2: "#dedeff",
+    minusStrandColor1: "#ffe0e2",
+    minusStrandColor2: "#fff0f1",
   },
 };
 
