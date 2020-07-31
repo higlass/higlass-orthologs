@@ -80,8 +80,59 @@ class EnsemblHelper {
     return mapping;
   }
 
+  initializeAminoAcidTexts(settings, Pixilib) {
+
+    const aas = ['X','W','C','G','R','S','T','A','P','F','L','V','I','M','Q','H','D','E','K','N','Y'];
+    const aminoAcids = {}
+
+    let maxWidth = 0;
+    let maxHeight = 0;
+
+    aas.forEach((aa) => {
+
+      const pixiText = new Pixilib.Text(
+        aa,
+        settings
+      );
+      pixiText.updateText();
+
+      pixiText.anchor.x = 0;
+      pixiText.anchor.y = 0;
+      pixiText.visible = true;
+  
+      // We get sharper edges if we scale down a large text
+      // This holds the 3 letter AA
+      const width = pixiText.getBounds().width / 2;
+      maxWidth = Math.max(maxWidth, width);
+      const height = pixiText.getBounds().height / 2;
+      maxHeight = Math.max(maxHeight, height);
+
+      const pixiSprite = new Pixilib.Sprite(
+        pixiText.texture
+      );
+      pixiSprite.width = width;
+      pixiSprite.height = height;
+
+      aminoAcids[aa] = {
+        pText: pixiText,
+        texture: pixiText.texture,
+        pSprite: pixiSprite,
+        width: width,
+        height: height
+      }
+
+    });
+
+    aminoAcids['maxWidth'] = maxWidth;
+    aminoAcids['maxHeight'] = maxHeight;
+
+    return aminoAcids;
+    
+  }
+
+
   initializeLabelTexts(settings, Pixilib) {
-    const spMapping = this.getSpeciesMapping()
+    const spMapping = this.getSpeciesMapping();
     const labels = Object.keys(spMapping);
     const pixiLabels = {};
 
@@ -106,6 +157,34 @@ class EnsemblHelper {
     });
 
     return pixiLabels;
+  }
+
+  getHumanSeq(geneId) {
+    // We can use any species to get the human sequence
+    const url =
+      "https://rest.ensembl.org/homology/id/" +
+      geneId +
+      "?type=orthologues&content-type=application/json&target_species=dog&aligned=0";
+
+    const response = fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((r) => r.json())
+      .then((r) => {
+        if('error' in r){
+          return null;
+        }else{
+          return r.data[0].homologies[0].source.seq;
+        }
+      })
+      .catch((err) => {
+        console.warn("err:", err);
+        return null;
+      });
+
+    return response;
   }
 }
 

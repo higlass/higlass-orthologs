@@ -32,11 +32,22 @@ const OrthologsTrack = (HGC, ...args) => {
       this.options = options;
       this.initOptions();
 
-      const ensemblHelper = new EnsemblHelper();
-      this.labels = ensemblHelper.initializeLabelTexts(
+      this.ensemblHelper = new EnsemblHelper();
+      this.labels = this.ensemblHelper.initializeLabelTexts(
         this.labelTextOptions,
         HGC.libraries.PIXI
       );
+
+      this.aminoAcidTexts = this.ensemblHelper.initializeAminoAcidTexts(
+        this.aaTextOptions,
+        HGC.libraries.PIXI
+      );
+
+      this.aminoAcidTextsBold = this.ensemblHelper.initializeAminoAcidTexts(
+        this.aaTextOptionsBold,
+        HGC.libraries.PIXI
+      );
+
       this.updateActiveSpecies();
     }
 
@@ -48,17 +59,15 @@ const OrthologsTrack = (HGC, ...args) => {
 
       tile.rectGraphics = new HGC.libraries.PIXI.Graphics();
       tile.rectMaskGraphics = new HGC.libraries.PIXI.Graphics();
-      tile.codonSeparatorGraphics = new HGC.libraries.PIXI.Graphics();
-      tile.codonTextGraphics = new HGC.libraries.PIXI.Graphics();
-      tile.labelBgGraphics = new HGC.libraries.PIXI.Graphics();
-      tile.labelGraphics = new HGC.libraries.PIXI.Graphics();
+      tile.aminoAcidTextGraphics = new HGC.libraries.PIXI.Graphics();
+      //tile.labelBgGraphics = new HGC.libraries.PIXI.Graphics();
+      //tile.labelGraphics = new HGC.libraries.PIXI.Graphics();
 
       tile.graphics.addChild(tile.rectGraphics);
       tile.graphics.addChild(tile.rectMaskGraphics);
-      tile.graphics.addChild(tile.codonSeparatorGraphics);
-      tile.graphics.addChild(tile.codonTextGraphics);
-      tile.graphics.addChild(tile.labelBgGraphics);
-      tile.graphics.addChild(tile.labelGraphics);
+      tile.graphics.addChild(tile.aminoAcidTextGraphics);
+      //tile.graphics.addChild(tile.labelBgGraphics);
+      //tile.graphics.addChild(tile.labelGraphics);
 
       tile.rectGraphics.mask = tile.rectMaskGraphics;
 
@@ -74,6 +83,8 @@ const OrthologsTrack = (HGC, ...args) => {
 
         td["transcriptId"] = transcriptId;
       });
+
+      tile.humanAminoAcids = [];
 
       tile.initialized = true;
 
@@ -113,6 +124,20 @@ const OrthologsTrack = (HGC, ...args) => {
       this.colors["+2"] = colorToHex(this.options.plusStrandColor2);
       this.colors["-1"] = colorToHex(this.options.minusStrandColor1);
       this.colors["-2"] = colorToHex(this.options.minusStrandColor2);
+      this.colors["aaColor"] = colorToHex(this.options.aminoAcidColor);
+
+      this.aaTextOptions = {
+        fontSize: `${this.fontSize * 2}px`,
+        fontFamily: this.options.fontFamily,
+        fill: this.colors["aaColor"],
+      };
+
+      this.aaTextOptionsBold = {
+        fontSize: `${this.fontSize * 2}px`,
+        fontFamily: this.options.fontFamily,
+        fill: this.colors["aaColor"],
+        fontWeight: "bold",
+      };
     }
 
     updateActiveSpecies() {
@@ -145,6 +170,7 @@ const OrthologsTrack = (HGC, ...args) => {
 
       const result = {
         transcriptId: this.transcriptId(ts),
+        geneIdEnsemble: ts[6].split(".")[0],
         transcriptName: ts[3],
         txStart: txStart,
         txEnd: txEnd,
@@ -212,10 +238,77 @@ const OrthologsTrack = (HGC, ...args) => {
             startCodonPos: tsFormatted.startCodonPos,
             stopCodonPos: tsFormatted.stopCodonPos,
             importance: tsFormatted.importance,
+            humanSequence: null,
             codonStartsAndLengths: codonStartsAndLengths,
           };
           this.transcriptInfo[tInfo.transcriptId] = tInfo;
+
+          // Add the sequence information
+          const humanSeq = this.ensemblHelper.getHumanSeq(
+            tsFormatted.geneIdEnsemble
+          );
+          humanSeq.then((seq) => {
+            this.transcriptInfo[tInfo.transcriptId].humanSequence = seq.split(
+              ""
+            );
+
+            // If we don't draw here, the sequence might not show up on startup
+            this.assignHumanSequenceToTiles();
+            this.draw();
+          });
         });
+    }
+
+    assignHumanSequenceToTiles() {
+      this.visibleAndFetchedTiles().forEach((tile) => {
+        // If we assigned it already, don't do it again.
+        if (tile.humanAminoAcids.length > 0) {
+          return;
+        }
+
+        // get the bounds of the tile
+        const tileId = +tile.tileId.split(".")[1];
+        const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
+        const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
+        const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
+        const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
+
+        const visibleTranscripts = Object.keys(this.transcriptInfo);
+
+        tile.humanAminoAcids = [];
+
+        visibleTranscripts.forEach((transcriptId) => {
+          const tInfo = this.transcriptInfo[transcriptId];
+          const visibleCodonStartsAndLengths = tInfo.codonStartsAndLengths.filter(
+            (c) => c[0] >= tileMinX && c[0] <= tileMaxX
+          );
+
+          visibleCodonStartsAndLengths.forEach((cs) => {
+            const letter = tInfo.humanSequence[cs[2]];
+
+            if (this.aminoAcidTexts[letter]) {
+              const aaText = this.aminoAcidTexts[letter];
+
+              const pixiSprite = new HGC.libraries.PIXI.Sprite(
+                aaText.texture
+              );
+              pixiSprite.width = aaText.width;
+              pixiSprite.height = aaText.height;
+
+              pixiSprite.position.x = 0; //needs to be adjusted n the draw method
+              pixiSprite.position.y = 0;
+
+              tile.humanAminoAcids.push({
+                start: cs[0], // abs coords
+                codonLength: cs[1],
+                letterWidth: aaText.width,
+                sprite: pixiSprite,
+              });
+            }
+          });
+        });
+        
+      });
     }
 
     calculateCodonPositions(ts, chrOffset) {
@@ -359,7 +452,7 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.drawnAtScale = this._xScale.copy();
       tile.rectGraphics.removeChildren();
       tile.rectGraphics.clear();
-      tile.labelBgGraphics.clear();
+      //tile.labelBgGraphics.clear();
 
       //const renderContext = [this, tile, this.rowHeight, this.rowSpacing];
 
@@ -381,8 +474,54 @@ const OrthologsTrack = (HGC, ...args) => {
         (x) => x.rectMaskGraphics,
       ]);
 
+      this.visibleAndFetchedTiles().forEach((tile) => {
+        this.drawAminoAcids(tile);
+      });
+
       // otherwise codons are not displayed on startup
       requestAnimationFrame(this.animate);
+    }
+
+    drawAminoAcids(tile) {
+      if (!this.transcriptInfo || !tile) return;
+
+      tile.aminoAcidTextGraphics.clear();
+      tile.aminoAcidTextGraphics.removeChildren();
+
+      const graphics = tile.aminoAcidTextGraphics;
+
+      // get the bounds of the tile
+      const tileId = +tile.tileId.split(".")[1];
+      const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
+      const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
+      const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
+      const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
+      const minX = this._xScale.invert(0);
+      const maxX = this._xScale.invert(this.dimensions[0]);
+
+      // console.log(this.transcriptInfo);
+      // console.log(tile);
+
+      // draw human sequence
+      if (this.activeSpecies.filter((s) => s.species === "human").length > 0) {
+        const yOffset = this.activeSpecies.filter(
+          (s) => s.species === "human"
+        )[0].yPosOffset;
+
+        tile.humanAminoAcids.forEach((aa) => {
+          if (
+            aa.start >= Math.max(minX, tileMinX) &&
+            aa.start <= Math.min(maxX, tileMaxX)
+          ) {
+            const xMiddle =
+              this._xScale(aa.start + aa.codonLength / 2) - aa.letterWidth / 2;
+            aa.sprite.position.x = xMiddle;
+            aa.sprite.position.y = yOffset;
+            //console.log(letter, xMiddle, yOffset);
+            graphics.addChild(aa.sprite);
+          }
+        });
+      }
     }
 
     renderExons(tile) {
@@ -547,12 +686,11 @@ const OrthologsTrack = (HGC, ...args) => {
     destroyTile(tile) {
       tile.rectGraphics.destroy();
       tile.rectMaskGraphics.destroy();
-      tile.labelGraphics.removeChildren();
-      tile.labelGraphics.destroy();
-      tile.labelBgGraphics.destroy();
-      tile.codonSeparatorGraphics.destroy();
-      tile.codonTextGraphics.removeChildren();
-      tile.codonTextGraphics.destroy();
+      //tile.labelGraphics.removeChildren();
+      //tile.labelGraphics.destroy();
+      //tile.labelBgGraphics.destroy();
+      tile.aminoAcidTextGraphics.removeChildren();
+      tile.aminoAcidTextGraphics.destroy();
       tile.graphics.destroy();
       tile = null;
     }
@@ -587,7 +725,7 @@ const icon =
 // default
 OrthologsTrack.config = {
   type: "horizontal-orthologs",
-  datatype: ["multivec"],
+  datatype: ["gene-annotation"],
   local: false,
   orientation: "1d-horizontal",
   thumbnail: new DOMParser().parseFromString(icon, "text/xml").documentElement,
@@ -611,6 +749,7 @@ OrthologsTrack.config = {
   ],
   defaultOptions: {
     labelColor: "black",
+    aminoAcidColor: "black",
     trackBorderColor: "white",
     backgroundColor: "white",
     barBorder: true,
