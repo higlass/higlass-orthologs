@@ -1,5 +1,7 @@
 class EnsemblHelper {
-  constructor() {}
+  constructor() {
+    this.speciesMapping = this.getSpeciesMapping();
+  }
 
   getSpeciesMapping() {
     const mapping = {};
@@ -80,26 +82,55 @@ class EnsemblHelper {
     return mapping;
   }
 
-  initializeAminoAcidTexts(settings, Pixilib) {
+  ensembleIdToAlias(ensembleId) {
+    let alias = null;
 
-    const aas = ['X','W','C','G','R','S','T','A','P','F','L','V','I','M','Q','H','D','E','K','N','Y'];
-    const aminoAcids = {}
+    Object.keys(this.speciesMapping).forEach((sp) => {
+      if (this.speciesMapping[sp].ensembleId === ensembleId) {
+        alias = sp;
+      }
+    });
+    return alias;
+  }
+
+  initializeAminoAcidTexts(settings, Pixilib) {
+    const aas = [
+      "X",
+      "W",
+      "C",
+      "G",
+      "R",
+      "S",
+      "T",
+      "A",
+      "P",
+      "F",
+      "L",
+      "V",
+      "I",
+      "M",
+      "Q",
+      "H",
+      "D",
+      "E",
+      "K",
+      "N",
+      "Y",
+      "-",
+    ];
+    const aminoAcids = {};
 
     let maxWidth = 0;
     let maxHeight = 0;
 
     aas.forEach((aa) => {
-
-      const pixiText = new Pixilib.Text(
-        aa,
-        settings
-      );
+      const pixiText = new Pixilib.Text(aa, settings);
       pixiText.updateText();
 
       pixiText.anchor.x = 0;
       pixiText.anchor.y = 0;
       pixiText.visible = true;
-  
+
       // We get sharper edges if we scale down a large text
       // This holds the 3 letter AA
       const width = pixiText.getBounds().width / 2;
@@ -107,9 +138,7 @@ class EnsemblHelper {
       const height = pixiText.getBounds().height / 2;
       maxHeight = Math.max(maxHeight, height);
 
-      const pixiSprite = new Pixilib.Sprite(
-        pixiText.texture
-      );
+      const pixiSprite = new Pixilib.Sprite(pixiText.texture);
       pixiSprite.width = width;
       pixiSprite.height = height;
 
@@ -118,27 +147,26 @@ class EnsemblHelper {
         texture: pixiText.texture,
         pSprite: pixiSprite,
         width: width,
-        height: height
-      }
-
+        height: height,
+      };
     });
 
-    aminoAcids['maxWidth'] = maxWidth;
-    aminoAcids['maxHeight'] = maxHeight;
+    aminoAcids["maxWidth"] = maxWidth;
+    aminoAcids["maxHeight"] = maxHeight;
 
     return aminoAcids;
-    
   }
 
-
   initializeLabelTexts(settings, Pixilib) {
-    const spMapping = this.getSpeciesMapping();
-    const labels = Object.keys(spMapping);
+    const labels = Object.keys(this.speciesMapping);
     const pixiLabels = {};
 
     labels.forEach((label) => {
       const pixiLabel = {};
-      const text = new Pixilib.Text(spMapping[label].display, settings);
+      const text = new Pixilib.Text(
+        this.speciesMapping[label].display,
+        settings
+      );
       text.interactive = true;
       text.anchor.x = 0;
       text.anchor.y = 0;
@@ -159,32 +187,149 @@ class EnsemblHelper {
     return pixiLabels;
   }
 
-  getHumanSeq(geneId) {
-    // We can use any species to get the human sequence
-    const url =
-      "https://rest.ensembl.org/homology/id/" +
-      geneId +
-      "?type=orthologues&content-type=application/json&target_species=dog&aligned=0";
+  // getHumanSequence(geneId) {
+  //   // We can use any species to get the human sequence, it is just important that we
+  //   // don't align it
+  //   const url =
+  //     "http://rest.ensembl.org/homology/id/" +
+  //     geneId +
+  //     "?type=orthologues&content-type=application/json&target_species=dog&aligned=0";
 
+  //   const response = fetch(url, {
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //     },
+  //   })
+  //     .then((r) => r.json())
+  //     .then((r) => {
+  //       if ("error" in r) {
+  //         return null;
+  //       } else {
+  //         return r.data[0].homologies[0].source.seq;
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       console.warn("err:", err);
+  //       return null;
+  //     });
+
+  //   return response;
+  // }
+
+  getSpeciesSequences(geneId, species) {
+    // Example request URL
+    // http://rest.ensembl.org/homology/id/ENSG00000139618?type=orthologues&content-type=application/json&cigar_line=0&target_species=cat&target_species=dog
+    // We can't only load the cigar line, because we need the actual sequence of the species -
+    // not only they they match with the human or not.
+
+    let speciesParam = "";
+
+    species.forEach((s) => {
+      speciesParam += "&target_species=" + s;
+    });
+
+    const url =
+      "http://rest.ensembl.org/homology/id/" +
+      geneId +
+      "?type=orthologues&content-type=application/json&cigar_line=0" +
+      speciesParam;
+
+    // whenever possible, used the cached version (we assume that the ensemble data does not change)
     const response = fetch(url, {
+      cache: "force-cache",
       headers: {
         "Content-Type": "application/json",
       },
     })
       .then((r) => r.json())
       .then((r) => {
-        if('error' in r){
-          return null;
-        }else{
-          return r.data[0].homologies[0].source.seq;
+        if ("error" in r) {
+          return {};
+        } else {
+          const homologies = r.data[0].homologies;
+          const speciesSeqData = {};
+
+          homologies.forEach((h,i) => {
+
+            const alias = this.ensembleIdToAlias(h.target.species);
+            if (!alias) return;
+
+            const humanSeq = h.source.align_seq;
+            const speciesSeq = h.target.align_seq;
+
+            // we have to treat the human seq separately, since it is not present in the homologies array
+            if(i === 0){
+              const refSeq = humanSeq.replace("-","").split("").map((s) => {
+                return {
+                  aa: s,
+                  match: true,
+                }
+              });
+              speciesSeqData["human"] = {
+                gaps: Array.from({length: refSeq.length}, (v, i) => ""),
+                seq: refSeq,
+              };
+            }
+
+            speciesSeqData[alias] = this.processAlignedSequences(
+              humanSeq,
+              speciesSeq
+            );
+          });
+
+          return speciesSeqData;
         }
       })
       .catch((err) => {
         console.warn("err:", err);
-        return null;
+        return {};
       });
 
     return response;
+  }
+
+  /**
+   *
+   * @param {str} humanSeq aligned human sequence from Ensemble
+   * @param {str} speciesSeq aligned species sequence from Ensemble
+   *
+   * Returns the species sequence that can be ligned up with the unaligned human sequecne,
+   * together with a array that contains the gaps
+   */
+  processAlignedSequences(humanSeq, speciesSeq) {
+    const hSeq = humanSeq.split("");
+    const sSeq = speciesSeq.split("");
+
+    if (hSeq.length !== sSeq.length) {
+      console.warn("Aligned Ensemble sequences don't have the same length");
+      return null;
+    }
+
+    const gaps = [];
+    const processedSeq = [];
+    let currentGap = "";
+
+    for (var i = 0, len = hSeq.length; i < len; i++) {
+      if (hSeq[i] === "-") {
+        currentGap += sSeq[i]; // accumulate AAs in current gap
+      } else {
+        gaps.push(currentGap);
+        processedSeq.push({
+          aa: sSeq[i],
+          match: hSeq[i] === sSeq[i],
+        });
+        currentGap = "";
+      }
+    }
+
+    const seqData = {
+      gaps: gaps,
+      seq: processedSeq,
+    };
+
+    return seqData;
+    //console.log(gaps.join('-'))
+    //console.log(processedSeq.map((s)=>s.aa).join(''))
   }
 }
 
