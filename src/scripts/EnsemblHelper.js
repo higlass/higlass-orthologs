@@ -1,6 +1,7 @@
 class EnsemblHelper {
   constructor() {
     this.speciesMapping = this.getSpeciesMapping();
+    this.seqDataCache = [];
   }
 
   getSpeciesMapping() {
@@ -80,6 +81,40 @@ class EnsemblHelper {
     };
 
     return mapping;
+  }
+
+  getSeqCacheId(geneId, species){
+    return geneId + species.join('');
+  }
+
+  getSeqDataFromCache(geneId, species){
+    const id = this.getSeqCacheId(geneId, species);
+
+    const foundElement = this.seqDataCache.find((e) => Object.keys(e)[0] === id);
+
+    if(!foundElement){
+      return false;
+    }
+    else{
+      return foundElement[id];
+    }
+
+  }
+
+  addToSeqCache(geneId, species, speciesSeqData){
+
+    if(this.getSeqDataFromCache(geneId, species)){
+      return;
+    }
+    const id = this.getSeqCacheId(geneId, species);
+
+    if(this.seqDataCache.length > 10){
+      this.seqDataCache.pop();
+    }
+
+    const dataToAdd = {};
+    dataToAdd[id] = speciesSeqData;
+    this.seqDataCache.unshift(dataToAdd);
   }
 
   ensembleIdToAlias(ensembleId) {
@@ -187,34 +222,6 @@ class EnsemblHelper {
     return pixiLabels;
   }
 
-  // getHumanSequence(geneId) {
-  //   // We can use any species to get the human sequence, it is just important that we
-  //   // don't align it
-  //   const url =
-  //     "http://rest.ensembl.org/homology/id/" +
-  //     geneId +
-  //     "?type=orthologues&content-type=application/json&target_species=dog&aligned=0";
-
-  //   const response = fetch(url, {
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //     },
-  //   })
-  //     .then((r) => r.json())
-  //     .then((r) => {
-  //       if ("error" in r) {
-  //         return null;
-  //       } else {
-  //         return r.data[0].homologies[0].source.seq;
-  //       }
-  //     })
-  //     .catch((err) => {
-  //       console.warn("err:", err);
-  //       return null;
-  //     });
-
-  //   return response;
-  // }
 
   getSpeciesSequences(geneId, species) {
     // Example request URL
@@ -276,6 +283,12 @@ class EnsemblHelper {
               speciesSeq
             );
           });
+
+          // const availableSpecies = Object.keys(speciesSeqData);
+          // const unavailableSpecies = species.filter((s) => !availableSpecies.includes(s));
+
+          this.addToSeqCache(geneId, species, speciesSeqData);
+          console.log("seqDataCache", this.seqDataCache);
 
           return speciesSeqData;
         }
