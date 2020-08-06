@@ -131,6 +131,50 @@ class EnsemblHelper {
     return alias;
   }
 
+  initializeGapNumbers(settings, Pixilib) {
+    // Numbers from 1 to 20, after that we show ">20"
+    const maxGap = 20;
+    const gapArr = Array.from(Array(maxGap), (_, i) => i + 1);
+    gapArr.push(">"+maxGap);
+    const gapNumbers = {};
+
+    let maxWidth = 0;
+    let maxHeight = 0;
+
+    gapArr.forEach((aa) => {
+      const pixiText = new Pixilib.Text(aa, settings);
+      pixiText.updateText();
+
+      pixiText.anchor.x = 0;
+      pixiText.anchor.y = 0;
+      pixiText.visible = true;
+
+      // We get sharper edges if we scale down a large text
+      const width = pixiText.getBounds().width / 2;
+      maxWidth = Math.max(maxWidth, width);
+      const height = pixiText.getBounds().height / 2;
+      maxHeight = Math.max(maxHeight, height);
+
+      const pixiSprite = new Pixilib.Sprite(pixiText.texture);
+      pixiSprite.width = width;
+      pixiSprite.height = height;
+
+      gapNumbers[aa] = {
+        //pText: pixiText,
+        texture: pixiText.texture,
+        pSprite: pixiSprite,
+        width: width,
+        height: height,
+      };
+    });
+
+    gapNumbers["maxWidth"] = maxWidth;
+    gapNumbers["maxHeight"] = maxHeight;
+    gapNumbers["maxGap"] = maxGap;
+
+    return gapNumbers;
+  }
+
   initializeAminoAcidTexts(settings, Pixilib) {
     const aas = [
       "X",
@@ -170,7 +214,6 @@ class EnsemblHelper {
       pixiText.visible = true;
 
       // We get sharper edges if we scale down a large text
-      // This holds the 3 letter AA
       const width = pixiText.getBounds().width / 2;
       maxWidth = Math.max(maxWidth, width);
       const height = pixiText.getBounds().height / 2;

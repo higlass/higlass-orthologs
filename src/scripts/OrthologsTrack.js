@@ -1,6 +1,3 @@
-import { scaleLinear } from "d3-scale";
-import { color } from "d3-color";
-
 import EnsemblHelper from "./EnsemblHelper";
 
 const OrthologsTrack = (HGC, ...args) => {
@@ -15,9 +12,6 @@ const OrthologsTrack = (HGC, ...args) => {
 
   // Utils
   const { colorToHex, trackUtils, absToChr } = HGC.utils;
-
-  const WHITE_HEX = colorToHex("#ffffff");
-  const DARKGREY_HEX = colorToHex("#999999");
 
   class OrthologsTrackClass extends HGC.tracks.HorizontalGeneAnnotationsTrack {
     constructor(context, options) {
@@ -35,6 +29,11 @@ const OrthologsTrack = (HGC, ...args) => {
       this.ensemblHelper = new EnsemblHelper();
       this.labels = this.ensemblHelper.initializeLabelTexts(
         this.labelTextOptions,
+        HGC.libraries.PIXI
+      );
+
+      this.gapTexts = this.ensemblHelper.initializeGapNumbers(
+        this.gapTextOptions,
         HGC.libraries.PIXI
       );
 
@@ -60,10 +59,12 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.rectGraphics = new HGC.libraries.PIXI.Graphics();
       tile.rectMaskGraphics = new HGC.libraries.PIXI.Graphics();
       tile.aminoAcidTextGraphics = new HGC.libraries.PIXI.Graphics();
+      tile.gapsGraphics = new HGC.libraries.PIXI.Graphics();
 
       tile.graphics.addChild(tile.rectGraphics);
       tile.graphics.addChild(tile.rectMaskGraphics);
       tile.graphics.addChild(tile.aminoAcidTextGraphics);
+      tile.graphics.addChild(tile.gapsGraphics);
 
       tile.rectGraphics.mask = tile.rectMaskGraphics;
 
@@ -80,8 +81,8 @@ const OrthologsTrack = (HGC, ...args) => {
         td["transcriptId"] = transcriptId;
       });
 
-      tile.humanAminoAcids = [];
       tile.sequenceData = {};
+      tile.gapsData = {};
 
       // This keeps track of when a rerender is necessary when we switch from AA view to condensed view
       tile.isRerenderNecessary = false;
@@ -110,6 +111,7 @@ const OrthologsTrack = (HGC, ...args) => {
       this.colors["-1"] = colorToHex(this.options.minusStrandColor1);
       this.colors["-2"] = colorToHex(this.options.minusStrandColor2);
       this.colors["-dark"] = colorToHex(this.options.minusStrandColorDark);
+      this.colors["gapsColor"] = colorToHex(this.options.gapsColor);
       this.colors["aaColor"] = colorToHex(this.options.aminoAcidColor);
       this.colors["aaColorNoMatch"] = colorToHex(
         this.options.aminoAcidColorNoMatch
@@ -133,6 +135,12 @@ const OrthologsTrack = (HGC, ...args) => {
         fontFamily: this.options.fontFamily,
         fill: this.colors["aaColorNoMatch"],
       };
+
+      this.gapTextOptions = {
+        fontSize: `${this.fontSize * 2 - 2}px`,
+        fontFamily: this.options.fontFamily,
+        fill: this.colors["gapsColor"],
+      };
     }
 
     updateActiveSpecies() {
@@ -149,13 +157,10 @@ const OrthologsTrack = (HGC, ...args) => {
           this.activeSpecies.push(as);
         }
       });
-      //console.log("ActiveSpecies", this.activeSpecies);
     }
 
     formatTranscriptData(ts) {
       const strand = ts[5];
-      // const stopCodonPos =
-      //   ts[12] === "." ? "." : strand === "+" ? +ts[12] + 2 : +ts[12] - 1;
       const stopCodonPos =
         ts[12] === "." ? "." : strand === "+" ? +ts[12] - 1 : +ts[12] + 2;
       const startCodonPos =
@@ -190,7 +195,7 @@ const OrthologsTrack = (HGC, ...args) => {
     drawTile() {}
 
     updateTranscriptInfo() {
-      console.log("updateTranscriptInfo");
+
       // get all visible transcripts
       const visibleTranscriptsObj = {};
       const chrOffsets = {};
@@ -207,55 +212,51 @@ const OrthologsTrack = (HGC, ...args) => {
         visibleTranscripts.push(visibleTranscriptsObj[tsId]);
       }
 
-      console.log(visibleTranscripts);
+      //console.log(visibleTranscripts);
 
       this.transcriptInfo = {};
       const seqDataPromises = [];
 
-      visibleTranscripts
-        // .sort(function (a, b) {
-        //   return +a[1] - b[1];
-        // })
-        .forEach((ts) => {
-          const tsFormatted = this.formatTranscriptData(ts);
-          const chrOffset = chrOffsets[tsFormatted.transcriptId];
+      visibleTranscripts.forEach((ts) => {
+        const tsFormatted = this.formatTranscriptData(ts);
+        const chrOffset = chrOffsets[tsFormatted.transcriptId];
 
-          const codonStartsAndLengths = this.calculateCodonPositions(
-            tsFormatted,
-            chrOffset
+        const codonStartsAndLengths = this.calculateCodonPositions(
+          tsFormatted,
+          chrOffset
+        );
+
+        const tInfo = {
+          transcriptId: tsFormatted.transcriptId,
+          transcriptName: tsFormatted.transcriptName,
+          txStart: tsFormatted.txStart,
+          txEnd: tsFormatted.txEnd,
+          strand: tsFormatted.strand,
+          chromName: tsFormatted.chromName,
+          codingType: tsFormatted.codingType,
+          exonStarts: tsFormatted.exonStarts,
+          exonEnds: tsFormatted.exonEnds,
+          startCodonPos: tsFormatted.startCodonPos,
+          stopCodonPos: tsFormatted.stopCodonPos,
+          importance: tsFormatted.importance,
+          sequenceData: null,
+          codonStartsAndLengths: codonStartsAndLengths,
+          showTranscript: true, // if transcripts overlap, this is used to hide one of them
+        };
+
+        this.transcriptInfo[tInfo.transcriptId] = tInfo;
+
+        if (this.zoomLevel >= this.maxZoom - 2) {
+          const speciesArr = this.activeSpecies.map((s) => s.species);
+
+          const seqDataPromise = this.ensemblHelper.getSeqData(
+            tsFormatted.geneIdEnsemble,
+            tInfo.transcriptId,
+            speciesArr
           );
-
-          const tInfo = {
-            transcriptId: tsFormatted.transcriptId,
-            transcriptName: tsFormatted.transcriptName,
-            txStart: tsFormatted.txStart,
-            txEnd: tsFormatted.txEnd,
-            strand: tsFormatted.strand,
-            chromName: tsFormatted.chromName,
-            codingType: tsFormatted.codingType,
-            exonStarts: tsFormatted.exonStarts,
-            exonEnds: tsFormatted.exonEnds,
-            startCodonPos: tsFormatted.startCodonPos,
-            stopCodonPos: tsFormatted.stopCodonPos,
-            importance: tsFormatted.importance,
-            sequenceData: null,
-            codonStartsAndLengths: codonStartsAndLengths,
-            showTranscript: true, // if transcripts overlap, this is used to hide one of them
-          };
-
-          this.transcriptInfo[tInfo.transcriptId] = tInfo;
-
-          if (this.zoomLevel >= this.maxZoom - 2) {
-            const speciesArr = this.activeSpecies.map((s) => s.species);
-
-            const seqDataPromise = this.ensemblHelper.getSeqData(
-              tsFormatted.geneIdEnsemble,
-              tInfo.transcriptId,
-              speciesArr
-            );
-            seqDataPromises.push(seqDataPromise);
-          }
-        });
+          seqDataPromises.push(seqDataPromise);
+        }
+      });
 
       // Once all the data is there, assign it to the transcriptInfo and rerender
       Promise.all(seqDataPromises).then((results) => {
@@ -265,9 +266,13 @@ const OrthologsTrack = (HGC, ...args) => {
         results.forEach((res) => {
           const transcriptId = res.transcriptId;
           const data = res.speciesSeqData;
+
+          if (this.transcriptInfo[transcriptId] === undefined) return;
+
+          this.transcriptInfo[transcriptId].sequenceData = data;
+
           //const txStart = this.transcriptInfo[transcriptId].txStart;
           //const txEnd = this.transcriptInfo[transcriptId].txEnd;
-          this.transcriptInfo[transcriptId].sequenceData = data;
 
           // if(Object.keys(data).length === 0){
           //   this.transcriptInfo[transcriptId].showTranscript = false;
@@ -323,13 +328,14 @@ const OrthologsTrack = (HGC, ...args) => {
           const transcriptInfo = transcript.fields;
           visibleTranscripts.push(this.transcriptId(transcriptInfo));
         });
-        //const visibleTranscripts = Object.keys(this.transcriptInfo);
 
         tile.sequenceData = {};
+        tile.gapsData = {};
 
         // Initialize
         this.activeSpecies.forEach((as) => {
           tile.sequenceData[as.species] = [];
+          tile.gapsData[as.species] = [];
         });
 
         visibleTranscripts.forEach((transcriptId) => {
@@ -364,13 +370,46 @@ const OrthologsTrack = (HGC, ...args) => {
             }
 
             const seq = seqData[species].seq;
+            const gaps = seqData[species].gaps;
 
             visibleCodonStartsAndLengths.forEach((cs) => {
-              if (!seq[cs[2]]) {
+              //cs = [codonStart, codonLength, codonId]
+              const codonStart = cs[0];
+              const codonLength = cs[1];
+              const codonId = cs[2];
+
+              if (!seq[codonId]) {
                 return;
               }
-              const letter = seq[cs[2]].aa;
-              const doesMatchWithHuman = seq[cs[2]].match;
+
+              // Add gaps data
+              if (gaps[codonId] !== "") {
+                const gapLength = gaps[codonId].length;
+                const maxGap = this.gapTexts["maxGap"];
+
+                const gapText =
+                  gapLength > maxGap
+                    ? this.gapTexts[">" + maxGap]
+                    : this.gapTexts[gapLength];
+
+                  const pixiSprite = new HGC.libraries.PIXI.Sprite(
+                    gapText.texture
+                  );
+                  pixiSprite.width = gapText.width;
+                  pixiSprite.height = gapText.height;
+
+                tile.gapsData[species].push({
+                  position: codonStart, // abs coords
+                  seq: gaps[codonId],
+                  gapLength: gapLength,
+                  sprite: pixiSprite,
+                  letterHeight: gapText.height,
+                });
+              }
+
+              // Add seq data
+              const letter = seq[codonId].aa;
+              const doesMatchWithHuman = seq[codonId].match;
 
               if (this.aminoAcidTexts[letter]) {
                 const aaText = doesMatchWithHuman
@@ -378,7 +417,7 @@ const OrthologsTrack = (HGC, ...args) => {
                   : this.aminoAcidTextsNoMatch[letter];
 
                 const backgroundColor =
-                  cs[2] % 2 === 0
+                  codonId % 2 === 0
                     ? this.colors[tInfo.strand + "2"]
                     : this.colors[tInfo.strand + "1"];
 
@@ -392,8 +431,8 @@ const OrthologsTrack = (HGC, ...args) => {
                 pixiSprite.position.y = 0;
 
                 tile.sequenceData[species].push({
-                  start: cs[0], // abs coords
-                  codonLength: cs[1],
+                  start: codonStart, // abs coords
+                  codonLength: codonLength,
                   letterWidth: aaText.width,
                   letterHeight: aaText.height,
                   sprite: pixiSprite,
@@ -598,6 +637,8 @@ const OrthologsTrack = (HGC, ...args) => {
 
       tile.aminoAcidTextGraphics.clear();
       tile.aminoAcidTextGraphics.removeChildren();
+      tile.gapsGraphics.clear();
+      tile.gapsGraphics.removeChildren();
 
       const codonWidth = this._xScale(3) - this._xScale(0);
       if (codonWidth < this.fontSize && tile.isRerenderNecessary) {
@@ -612,24 +653,43 @@ const OrthologsTrack = (HGC, ...args) => {
 
       const graphics = tile.aminoAcidTextGraphics;
 
+      const gapsGraphics = tile.gapsGraphics;
+      gapsGraphics.beginFill(this.colors["gapsColor"]);
+
       const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
       const minX = this._xScale.invert(0);
       const maxX = this._xScale.invert(this.dimensions[0]);
 
+      // the -3 means we load also the adjacent entries from the neigbour tile,
+      // otherwise there might be gaps across tiles
+      const visibleMinX = Math.max(minX, tileMinX) - 3;
+      const visibleMaxX = Math.min(maxX, tileMaxX);
+
+      const totalRowHeight = this.rowHeight + this.rowSpacing;
+
       this.activeSpecies.forEach((as) => {
         const yOffset = as.yPosOffset;
+        const yMiddle = yOffset + totalRowHeight / 2;
         const species = as.species;
 
-        const totalRowHeight = this.rowHeight + this.rowSpacing;
-        const yMiddle = yOffset + totalRowHeight / 2;
+        tile.gapsData[species].forEach((gap) => {
+          if (gap.position >= visibleMinX && gap.position <= visibleMaxX) {
+
+            const drawX = this._xScale(gap.position);
+            gapsGraphics.drawRect(drawX - 1, yOffset, 2, totalRowHeight);
+
+            // if there is enough space, show the gap numbers
+            if(codonWidth > 2.2*this.gapTexts["maxWidth"]){
+              gap.sprite.position.x = drawX + 3;
+              gap.sprite.position.y = yMiddle - gap.letterHeight / 2;
+              gapsGraphics.addChild(gap.sprite);
+            }
+            
+          }
+        });
 
         tile.sequenceData[species].forEach((aa) => {
-          if (
-            // the -2 means we load also the adjacent entries from the neigbor tile,
-            // otherwise there might be gaps across tiles
-            aa.start >= Math.max(minX, tileMinX - 2) &&
-            aa.start <= Math.min(maxX, tileMaxX)
-          ) {
+          if (aa.start >= visibleMinX && aa.start <= visibleMaxX) {
             const xMiddle = this._xScale(aa.start + aa.codonLength / 2);
             graphics.beginFill(aa.backgroundColor);
             const width = (codonWidth * aa.codonLength) / 3;
@@ -759,9 +819,6 @@ const OrthologsTrack = (HGC, ...args) => {
         const transcriptInfo = transcript.fields;
         const transcriptId = this.transcriptId(transcriptInfo);
 
-        //console.log(transcriptId)
-        //console.log(tile.sequenceData)
-        //if(!this.transcriptInfo[transcriptId]) return;
         if (!this.transcriptInfo[transcriptId]["showTranscript"]) return;
 
         const isProteinCoding =
@@ -817,7 +874,7 @@ const OrthologsTrack = (HGC, ...args) => {
         maxLabelWidth = Math.max(maxLabelWidth, sp.label.width);
       });
 
-      this.pForeground.beginFill(WHITE_HEX);
+      this.pForeground.beginFill(this.colors['white']);
       this.pForeground.drawRect(
         0,
         0,
@@ -849,6 +906,8 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.rectMaskGraphics.destroy();
       tile.aminoAcidTextGraphics.removeChildren();
       tile.aminoAcidTextGraphics.destroy();
+      tile.gapsGraphics.removeChildren();
+      tile.gapsGraphics.destroy();
       tile.graphics.destroy();
       tile = null;
     }
@@ -939,6 +998,7 @@ OrthologsTrack.config = {
     minusStrandColor1: "#ffe0e2",
     minusStrandColor2: "#fff0f1",
     minusStrandColorDark: "#fabec2",
+    gapsColor: "#eb9c00",
   },
 };
 
