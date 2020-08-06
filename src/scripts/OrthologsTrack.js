@@ -60,14 +60,10 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.rectGraphics = new HGC.libraries.PIXI.Graphics();
       tile.rectMaskGraphics = new HGC.libraries.PIXI.Graphics();
       tile.aminoAcidTextGraphics = new HGC.libraries.PIXI.Graphics();
-      //tile.labelBgGraphics = new HGC.libraries.PIXI.Graphics();
-      //tile.labelGraphics = new HGC.libraries.PIXI.Graphics();
 
       tile.graphics.addChild(tile.rectGraphics);
       tile.graphics.addChild(tile.rectMaskGraphics);
       tile.graphics.addChild(tile.aminoAcidTextGraphics);
-      //tile.graphics.addChild(tile.labelBgGraphics);
-      //tile.graphics.addChild(tile.labelGraphics);
 
       tile.rectGraphics.mask = tile.rectMaskGraphics;
 
@@ -86,6 +82,9 @@ const OrthologsTrack = (HGC, ...args) => {
 
       tile.humanAminoAcids = [];
       tile.sequenceData = {};
+
+      // This keeps track of when a rerender is necessary when we switch from AA view to condensed view
+      tile.isRerenderNecessary = false;
 
       tile.initialized = true;
 
@@ -208,12 +207,15 @@ const OrthologsTrack = (HGC, ...args) => {
         visibleTranscripts.push(visibleTranscriptsObj[tsId]);
       }
 
+      console.log(visibleTranscripts);
+
       this.transcriptInfo = {};
+      const seqDataPromises = [];
 
       visibleTranscripts
-        .sort(function (a, b) {
-          return +a[1] - b[1];
-        })
+        // .sort(function (a, b) {
+        //   return +a[1] - b[1];
+        // })
         .forEach((ts) => {
           const tsFormatted = this.formatTranscriptData(ts);
           const chrOffset = chrOffsets[tsFormatted.transcriptId];
@@ -238,45 +240,71 @@ const OrthologsTrack = (HGC, ...args) => {
             importance: tsFormatted.importance,
             sequenceData: null,
             codonStartsAndLengths: codonStartsAndLengths,
+            showTranscript: true, // if transcripts overlap, this is used to hide one of them
           };
+
           this.transcriptInfo[tInfo.transcriptId] = tInfo;
 
-          if (this.zoomLevel >= this.maxZoom - 1) {
+          if (this.zoomLevel >= this.maxZoom - 2) {
             const speciesArr = this.activeSpecies.map((s) => s.species);
 
-            const speciesSeqDataFromCache = this.ensemblHelper.getSeqDataFromCache(
+            const seqDataPromise = this.ensemblHelper.getSeqData(
               tsFormatted.geneIdEnsemble,
+              tInfo.transcriptId,
               speciesArr
             );
-
-            if (speciesSeqDataFromCache) {
-              console.log("Cache hit");
-              this.transcriptInfo[
-                tInfo.transcriptId
-              ].sequenceData = speciesSeqDataFromCache;
-              this.assignSequenceDataToTiles();
-              this.visibleAndFetchedTiles().forEach((tile) => {
-                this.renderTile(tile);
-              });
-              this.draw();
-            } else {
-              console.log("Origin hit");
-              const speciesSeqData = this.ensemblHelper.getSpeciesSequences(
-                tsFormatted.geneIdEnsemble,
-                speciesArr
-              );
-
-              speciesSeqData.then((data) => {
-                this.transcriptInfo[tInfo.transcriptId].sequenceData = data;
-                this.assignSequenceDataToTiles();
-                this.visibleAndFetchedTiles().forEach((tile) => {
-                  this.renderTile(tile);
-                });
-                this.draw();
-              });
-            }
+            seqDataPromises.push(seqDataPromise);
           }
         });
+
+      // Once all the data is there, assign it to the transcriptInfo and rerender
+      Promise.all(seqDataPromises).then((results) => {
+        // results is an array of seq data from Ensemble
+        if (results.length === 0) return;
+
+        results.forEach((res) => {
+          const transcriptId = res.transcriptId;
+          const data = res.speciesSeqData;
+          //const txStart = this.transcriptInfo[transcriptId].txStart;
+          //const txEnd = this.transcriptInfo[transcriptId].txEnd;
+          this.transcriptInfo[transcriptId].sequenceData = data;
+
+          // if(Object.keys(data).length === 0){
+          //   this.transcriptInfo[transcriptId].showTranscript = false;
+          //   return;
+          // }
+
+          // Not very efficient, but we most likely we don't have more than 3 results anyway
+          // This hides transcripts that overlap (keeps the one with more data in Ensembl.
+          // Commented for now, since this should be done in the data preparation step.
+          // for (var i = 0; i < results.length; i++) {
+          //   if (results[i].transcriptId === transcriptId) {
+          //     continue;
+          //   }
+          //   const transcriptId2 = results[i].transcriptId;
+          //   const txStart2 = this.transcriptInfo[transcriptId2].txStart;
+          //   const txEnd2 = this.transcriptInfo[transcriptId2].txEnd;
+          //   const data2 = results[i].speciesSeqData;
+          //   const doTranscriptsOverlap =
+          //     (txStart2 < txEnd && txStart2 > txStart) ||
+          //     (txEnd2 > txStart && txEnd2 < txEnd);
+
+          //   if (
+          //     doTranscriptsOverlap &&
+          //     Object.keys(data).length < Object.keys(data2).length
+          //   ) {
+          //     this.transcriptInfo[transcriptId].showTranscript = false;
+          //   }
+          // }
+          // console.log(data);
+        });
+
+        this.assignSequenceDataToTiles();
+        this.visibleAndFetchedTiles().forEach((tile) => {
+          this.renderTile(tile);
+        });
+        this.draw();
+      });
     }
 
     assignSequenceDataToTiles() {
@@ -286,16 +314,23 @@ const OrthologsTrack = (HGC, ...args) => {
           return;
         }
 
-        // get the bounds of the tile
-        const tileId = +tile.tileId.split(".")[1];
-        const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
-        const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
-        const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
-        const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
+        const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
 
-        const visibleTranscripts = Object.keys(this.transcriptInfo);
+        const transcripts = tile.tileData;
+        const visibleTranscripts = [];
+
+        transcripts.forEach((transcript) => {
+          const transcriptInfo = transcript.fields;
+          visibleTranscripts.push(this.transcriptId(transcriptInfo));
+        });
+        //const visibleTranscripts = Object.keys(this.transcriptInfo);
 
         tile.sequenceData = {};
+
+        // Initialize
+        this.activeSpecies.forEach((as) => {
+          tile.sequenceData[as.species] = [];
+        });
 
         visibleTranscripts.forEach((transcriptId) => {
           const tInfo = this.transcriptInfo[transcriptId];
@@ -303,18 +338,32 @@ const OrthologsTrack = (HGC, ...args) => {
 
           if (!seqData) return;
 
+          if (!this.transcriptInfo[transcriptId]["showTranscript"]) return;
+
           // The offset it important for AAs across tiles. They need to overlap.
           const visibleCodonStartsAndLengths = tInfo.codonStartsAndLengths.filter(
             (c) => c[0] >= tileMinX - 2 && c[0] <= tileMaxX
           );
-          //console.log(tInfo.codonStartsAndLengths);
-          //console.log(visibleCodonStartsAndLengths);
-          console.log(Object.keys(seqData));
 
-          // Go through each sequence for each loaded species
-          Object.keys(seqData).forEach((species) => {
+          Object.keys(tile.sequenceData).forEach((species) => {
+            // if no ensembl data is available, add dummy data, that leads to a grey bar
+            if (!seqData[species]) {
+              visibleCodonStartsAndLengths.forEach((cs) => {
+                tile.sequenceData[species].push({
+                  start: cs[0], // abs coords
+                  codonLength: cs[1],
+                  letterWidth: 0,
+                  letterHeight: 0,
+                  sprite: null,
+                  match: false,
+                  strand: null,
+                  backgroundColor: this.colors["lightgrey"],
+                });
+              });
+              return;
+            }
+
             const seq = seqData[species].seq;
-            tile.sequenceData[species] = [];
 
             visibleCodonStartsAndLengths.forEach((cs) => {
               if (!seq[cs[2]]) {
@@ -360,7 +409,7 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     calculateCodonPositions(ts, chrOffset) {
-      if (this.zoomLevel < this.maxZoom - 1) {
+      if (this.zoomLevel < this.maxZoom - 2) {
         return [];
       }
 
@@ -368,7 +417,6 @@ const OrthologsTrack = (HGC, ...args) => {
       const exonEnds = ts["exonEnds"];
       const strand = ts["strand"];
       const codonStartsAndLengths = [];
-      //console.log("calculateCodonPositions", ts);
 
       const isProteinCoding =
         ts["startCodonPos"] !== "." && ts["stopCodonPos"] !== ".";
@@ -512,7 +560,13 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.rectGraphics.removeChildren();
       tile.rectGraphics.clear();
 
-      this.renderExons(tile);
+      const codonWidth = this._xScale(3) - this._xScale(0);
+
+      if (Object.keys(tile.sequenceData).length === 0) {
+        this.renderExons(tile);
+      } else if (codonWidth < this.fontSize) {
+        this.renderCondensedView(tile);
+      }
 
       this.renderMask(tile);
 
@@ -537,7 +591,6 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     drawAminoAcids(tile) {
-      
       if (!this.transcriptInfo || !tile || !tile.initialized) return;
 
       // If there is no seq data, don't draw. This will prevent drawing on lower zoom levels
@@ -546,21 +599,22 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.aminoAcidTextGraphics.clear();
       tile.aminoAcidTextGraphics.removeChildren();
 
+      const codonWidth = this._xScale(3) - this._xScale(0);
+      if (codonWidth < this.fontSize && tile.isRerenderNecessary) {
+        this.renderTile(tile);
+        tile.isRerenderNecessary = false;
+        return;
+      } else if (codonWidth < this.fontSize) {
+        return;
+      } else {
+        tile.isRerenderNecessary = true;
+      }
+
       const graphics = tile.aminoAcidTextGraphics;
 
-      // get the bounds of the tile
-      const tileId = +tile.tileId.split(".")[1];
-      const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
-      const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
-      const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
-      const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
+      const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
       const minX = this._xScale.invert(0);
       const maxX = this._xScale.invert(this.dimensions[0]);
-
-      // console.log(this.transcriptInfo);
-      // console.log(tile);
-
-      const codonWidth = this._xScale(3) - this._xScale(0);
 
       this.activeSpecies.forEach((as) => {
         const yOffset = as.yPosOffset;
@@ -568,32 +622,6 @@ const OrthologsTrack = (HGC, ...args) => {
 
         const totalRowHeight = this.rowHeight + this.rowSpacing;
         const yMiddle = yOffset + totalRowHeight / 2;
-
-        // If ensemble did not return any data for that species, show grey box
-        // We use the human sequence as base (always available)
-        if (tile.sequenceData[species] === undefined && codonWidth >= this.fontSize) {
-          graphics.beginFill(this.colors["lightgrey"]);
-
-          tile.sequenceData["human"].forEach((aa) => {
-            if (
-              aa.start >= Math.max(minX, tileMinX - 2) &&
-              aa.start <= Math.min(maxX, tileMaxX)
-            ) {
-              const width = (codonWidth * aa.codonLength) / 3;
-              graphics.drawRect(
-                this._xScale(aa.start),
-                yOffset,
-                width,
-                totalRowHeight
-              );
-            }
-          });
-
-          return;
-        }
-        else if(tile.sequenceData[species] === undefined){
-          return;
-        }
 
         tile.sequenceData[species].forEach((aa) => {
           if (
@@ -603,34 +631,19 @@ const OrthologsTrack = (HGC, ...args) => {
             aa.start <= Math.min(maxX, tileMaxX)
           ) {
             const xMiddle = this._xScale(aa.start + aa.codonLength / 2);
-            // if individual codons are too close together, show the consensed view
-            if (codonWidth < this.fontSize) {
-              // const colorUsed = aa.match
-              //   ? aa.strand === "+"
-              //     ? this.colors["+dark"]
-              //     : this.colors["-dark"]
-              //   : this.colors["white"];
-              // graphics.beginFill(colorUsed);
-              // const width = (codonWidth * aa.codonLength) / 3;
-              // graphics.drawRect(
-              //   this._xScale(aa.start),
-              //   yOffset,
-              //   width,
-              //   totalRowHeight
-              // );
-            } else {
-              graphics.beginFill(aa.backgroundColor);
-              const width = (codonWidth * aa.codonLength) / 3;
-              graphics.drawRect(
-                this._xScale(aa.start),
-                yOffset,
-                width,
-                totalRowHeight
-              );
+            graphics.beginFill(aa.backgroundColor);
+            const width = (codonWidth * aa.codonLength) / 3;
+            graphics.drawRect(
+              this._xScale(aa.start),
+              yOffset,
+              width,
+              totalRowHeight
+            );
 
+            if (aa.sprite) {
+              // This is null when there is not data from Ensembl
               aa.sprite.position.x = xMiddle - aa.letterWidth / 2;
               aa.sprite.position.y = yMiddle - aa.letterHeight / 2;
-              //console.log(letter, xMiddle, yOffset);
               graphics.addChild(aa.sprite);
             }
           }
@@ -638,27 +651,18 @@ const OrthologsTrack = (HGC, ...args) => {
       });
     }
 
+    // This renders the transcript only
     renderExons(tile) {
-
-      // get the bounds of the tile
-      const tileId = +tile.tileId.split(".")[1];
-      const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
-      const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
-      const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
-      const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
-      const minX = this._xScale.invert(-this.dimensions[0]);
-      const maxX = this._xScale.invert(2*this.dimensions[0]);
-
-      const codonWidth = this._xScale(3) - this._xScale(0);
-
+      const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
       const transcripts = tile.tileData;
-      //console.log(tile)
 
       transcripts.forEach((transcript) => {
         const transcriptInfo = transcript.fields;
         const chrOffset = +transcript.chrOffset;
 
         const transcriptId = this.transcriptId(transcriptInfo);
+
+        if (!this.transcriptInfo[transcriptId]["showTranscript"]) return;
 
         const exonStarts = this.transcriptInfo[transcriptId]["exonStarts"];
         const exonEnds = this.transcriptInfo[transcriptId]["exonEnds"];
@@ -734,111 +738,73 @@ const OrthologsTrack = (HGC, ...args) => {
           exonRects.push([rectStartX, 0, rectEndX - rectStartX, rectHeight]);
         }
 
-        // const stripeRects = [];
-        // // draw stripes into table
-        // if (this.zoomLevel === this.maxZoom) {
-        //   const codonStartsAndLengths = this.transcriptInfo[transcriptId][
-        //     "codonStartsAndLengths"
-        //   ].filter((entry) => {
-        //     return (
-        //       // the -2 means we load also the adjacent entries fromt he neigbour tile,
-        //       // otherwise there might be gaps when across tiles
-        //       entry[0] >= tileMinX - 2 &&
-        //       entry[0] <= tileMaxX &&
-        //       entry[2] % 2 === 0
-        //     );
-        //   });
-
-        //   for (let j = 0; j < codonStartsAndLengths.length; j++) {
-        //     const codonStart = codonStartsAndLengths[j][0];
-        //     const codonLength = codonStartsAndLengths[j][1];
-        //     const codonEnd = codonStart + codonLength;
-
-        //     const xStart = this._xScale(codonStart);
-        //     const localWidth = Math.max(
-        //       1,
-        //       this._xScale(codonEnd) - this._xScale(codonStart)
-        //     );
-
-        //     stripeRects.push([xStart, 0, localWidth, rectHeight]);
-        //   }
-        // }
-
         // Draw Everything
-        // This means we are on low zoom levels -> draw only the placeholders
-        if (Object.keys(tile.sequenceData).length === 0){
-          const color1 = this.colors[strand + "1"];
-          tile.rectGraphics.beginFill(color1);
-          for (var i = 0, len = exonRects.length; i < len; i++) {
-            tile.rectGraphics.drawRect(...exonRects[i]);
-          }
+        const color1 = this.colors[strand + "1"];
+        tile.rectGraphics.beginFill(color1);
+        for (var i = 0, len = exonRects.length; i < len; i++) {
+          tile.rectGraphics.drawRect(...exonRects[i]);
         }
-        else{
+      });
+    }
 
-          this.activeSpecies.forEach((as) => {
-            const yOffset = as.yPosOffset;
-            const species = as.species;
-    
-            const totalRowHeight = this.rowHeight + this.rowSpacing;
-            const yMiddle = yOffset + totalRowHeight / 2;
-    
-            // If ensemble did not return any data for that species, show grey box
-            // We use the human sequence as base (always available)
-            if (tile.sequenceData[species] === undefined) {
-              tile.rectGraphics.beginFill(this.colors["lightgrey"]);
-    
-              tile.sequenceData["human"].forEach((aa) => {
-                if (
-                  aa.start >= Math.max(minX, tileMinX - 2) &&
-                  aa.start <= Math.min(maxX, tileMaxX) &&
-                  codonWidth < this.fontSize
-                ) {
-                  const width = (codonWidth * aa.codonLength) / 3;
-                  tile.rectGraphics.drawRect(
-                    this._xScale(aa.start),
-                    yOffset,
-                    width,
-                    totalRowHeight
-                  );
-                }
-              });
-    
-              return;
-            }
-    
-            tile.sequenceData[species].forEach((aa) => {
-              if (
-                // the -2 means we load also the adjacent entries from the neigbor tile,
-                // otherwise there might be gaps across tiles
-                aa.start >= Math.max(minX, tileMinX - 2) &&
-                aa.start <= Math.min(maxX, tileMaxX) &&
-                codonWidth < this.fontSize
-              ) {
-                const colorUsed = aa.match
-                    ? aa.strand === "+"
-                      ? this.colors["+dark"]
-                      : this.colors["-dark"]
-                    : this.colors["white"];
-                    tile.rectGraphics.beginFill(colorUsed);
-                  const width = (codonWidth * aa.codonLength) / 3;
-                  tile.rectGraphics.drawRect(
-                    this._xScale(aa.start),
-                    yOffset,
-                    width,
-                    totalRowHeight
-                  );
+    renderCondensedView(tile) {
+      const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
+      const minX = this._xScale.invert(-this.dimensions[0]);
+      const maxX = this._xScale.invert(2 * this.dimensions[0]);
+
+      const codonWidth = this._xScale(3) - this._xScale(0);
+      const transcripts = tile.tileData;
+
+      transcripts.forEach((transcript) => {
+        const transcriptInfo = transcript.fields;
+        const transcriptId = this.transcriptId(transcriptInfo);
+
+        //console.log(transcriptId)
+        //console.log(tile.sequenceData)
+        //if(!this.transcriptInfo[transcriptId]) return;
+        if (!this.transcriptInfo[transcriptId]["showTranscript"]) return;
+
+        const isProteinCoding =
+          this.transcriptInfo[transcriptId]["startCodonPos"] !== "." &&
+          this.transcriptInfo[transcriptId]["stopCodonPos"] !== ".";
+
+        if (!isProteinCoding) {
+          return;
+        }
+
+        this.activeSpecies.forEach((as) => {
+          const yOffset = as.yPosOffset;
+          const species = as.species;
+          const totalRowHeight = this.rowHeight + this.rowSpacing;
+
+          tile.sequenceData[species].forEach((aa) => {
+            if (
+              // the -2 means we load also the adjacent entries from the neigbor tile,
+              // otherwise there might be gaps across tiles
+              aa.start >= Math.max(minX, tileMinX - 2) &&
+              aa.start <= Math.min(maxX, tileMaxX)
+            ) {
+              let colorUsed = this.colors["white"];
+              if (aa.match && aa.strand === "+") {
+                colorUsed = this.colors["+dark"];
+              } else if (aa.match && aa.strand === "-") {
+                colorUsed = this.colors["-dark"];
+              } else if (aa.sprite === null) {
+                // no data available
+                colorUsed = this.colors["lightgrey"];
               }
-            });
+
+              tile.rectGraphics.beginFill(colorUsed);
+              const width = (codonWidth * aa.codonLength) / 3;
+              tile.rectGraphics.drawRect(
+                this._xScale(aa.start),
+                yOffset,
+                width,
+                totalRowHeight
+              );
+            }
           });
-
-        }
-        
-
-        // const color2 = this.colors[strand + "2"];
-        // tile.rectGraphics.beginFill(color2);
-        // for (var i = 0, len = stripeRects.length; i < len; i++) {
-        //   tile.rectGraphics.drawRect(...stripeRects[i]);
-        // }
+        });
       });
     }
 
@@ -881,9 +847,6 @@ const OrthologsTrack = (HGC, ...args) => {
     destroyTile(tile) {
       tile.rectGraphics.destroy();
       tile.rectMaskGraphics.destroy();
-      //tile.labelGraphics.removeChildren();
-      //tile.labelGraphics.destroy();
-      //tile.labelBgGraphics.destroy();
       tile.aminoAcidTextGraphics.removeChildren();
       tile.aminoAcidTextGraphics.destroy();
       tile.graphics.destroy();
@@ -903,8 +866,17 @@ const OrthologsTrack = (HGC, ...args) => {
       let zoomLevel = Math.min(xZoomLevel, this.maxZoom);
       zoomLevel = Math.max(zoomLevel, 0);
 
-      //console.log(zoomLevel, this._xScale.domain())
       return zoomLevel;
+    }
+
+    getBoundsOfTile(tile) {
+      // get the bounds of the tile
+      const tileId = +tile.tileId.split(".")[1];
+      const zoomLevel = +tile.tileId.split(".")[0]; //track.zoomLevel does not always seem to be up to date
+      const tileWidth = +this.tilesetInfo.max_width / 2 ** zoomLevel;
+      const tileMinX = this.tilesetInfo.min_pos[0] + tileId * tileWidth; // abs coordinates
+      const tileMaxX = this.tilesetInfo.min_pos[0] + (tileId + 1) * tileWidth;
+      return [tileMinX, tileMaxX];
     }
 
     getMouseOverHtml(trackX, trackY) {

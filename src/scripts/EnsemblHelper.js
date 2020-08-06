@@ -87,23 +87,26 @@ class EnsemblHelper {
     return geneId + species.join('');
   }
 
-  getSeqDataFromCache(geneId, species){
+  getSeqData(geneId, transcriptId, species){
     const id = this.getSeqCacheId(geneId, species);
 
     const foundElement = this.seqDataCache.find((e) => Object.keys(e)[0] === id);
 
     if(!foundElement){
-      return false;
+      return this.getSpeciesSequencesFromEnsembl(geneId, transcriptId, species);
     }
     else{
-      return foundElement[id];
+      const result = new Promise((resolve, reject) => {
+        resolve(foundElement[id]);
+      }) 
+      return result;
     }
 
   }
 
   addToSeqCache(geneId, species, speciesSeqData){
 
-    if(this.getSeqDataFromCache(geneId, species)){
+    if(this.seqDataCache.find((e) => Object.keys(e)[0] === id)){
       return;
     }
     const id = this.getSeqCacheId(geneId, species);
@@ -223,7 +226,7 @@ class EnsemblHelper {
   }
 
 
-  getSpeciesSequences(geneId, species) {
+  getSpeciesSequencesFromEnsembl(geneId, transcriptId, species) {
     // Example request URL
     // http://rest.ensembl.org/homology/id/ENSG00000139618?type=orthologues&content-type=application/json&cigar_line=0&target_species=cat&target_species=dog
     // We can't only load the cigar line, because we need the actual sequence of the species -
@@ -287,10 +290,14 @@ class EnsemblHelper {
           // const availableSpecies = Object.keys(speciesSeqData);
           // const unavailableSpecies = species.filter((s) => !availableSpecies.includes(s));
 
-          this.addToSeqCache(geneId, species, speciesSeqData);
-          console.log("seqDataCache", this.seqDataCache);
+          const result = {
+            transcriptId,
+            speciesSeqData
+          }
 
-          return speciesSeqData;
+          this.addToSeqCache(geneId, species, result);
+
+          return result;
         }
       })
       .catch((err) => {

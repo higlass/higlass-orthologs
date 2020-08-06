@@ -10,6 +10,8 @@ clodius aggregate bedfile --max-per-tile 20 --importance-column 5 --chromsizes-f
 
 python manage.py ingest_tileset --filename data/transcripts_20200722.db --filetype beddb --datatype gene-annotation --uid transcripts_20200722
 
-
 # Known canonical
 http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/
+
+# Extract a dataset fromt he GTF file
+python extractTranscriptDataFromGTF.py --gtf_file gencode.v34.annotation.gtf

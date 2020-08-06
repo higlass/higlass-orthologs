@@ -50,7 +50,7 @@ chrms = [i.split('\t')[0] for i in chrsizes]
 for i, v in df.iterrows():
     if i % 5000 == 0:
         print("Progress: ", str(i),"/", str(total_entries))
-    if (v['gene_type'] == 'protein_coding') and (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon') and (v['transcript_id'] in known_canonicals):
+    if (v['gene_type'] == 'protein_coding') and (v['transcript_type'] == 'protein_coding') and (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon') and (v['transcript_id'] in known_canonicals):
         if v['gene_id'] not in data:
             data[v['gene_id']] = {}
 
