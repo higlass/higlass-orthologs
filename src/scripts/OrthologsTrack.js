@@ -195,7 +195,6 @@ const OrthologsTrack = (HGC, ...args) => {
     drawTile() {}
 
     updateTranscriptInfo() {
-
       // get all visible transcripts
       const visibleTranscriptsObj = {};
       const chrOffsets = {};
@@ -392,11 +391,11 @@ const OrthologsTrack = (HGC, ...args) => {
                     ? this.gapTexts[">" + maxGap]
                     : this.gapTexts[gapLength];
 
-                  const pixiSprite = new HGC.libraries.PIXI.Sprite(
-                    gapText.texture
-                  );
-                  pixiSprite.width = gapText.width;
-                  pixiSprite.height = gapText.height;
+                const pixiSprite = new HGC.libraries.PIXI.Sprite(
+                  gapText.texture
+                );
+                pixiSprite.width = gapText.width;
+                pixiSprite.height = gapText.height;
 
                 tile.gapsData[species].push({
                   position: codonStart, // abs coords
@@ -416,7 +415,7 @@ const OrthologsTrack = (HGC, ...args) => {
                   ? this.aminoAcidTexts[letter]
                   : this.aminoAcidTextsNoMatch[letter];
 
-                const backgroundColor =
+                let backgroundColor =
                   codonId % 2 === 0
                     ? this.colors[tInfo.strand + "2"]
                     : this.colors[tInfo.strand + "1"];
@@ -490,7 +489,7 @@ const OrthologsTrack = (HGC, ...args) => {
       }
 
       // We want to assign each codon the correct position in the genome. Since
-      // they can be split between exons, we have to keep track how they are psoitioned
+      // they can be split between exons, we have to keep track how they are positioned
       // across exons
       let codonLengthCorrection = 0;
       let nextCodonLength = 3;
@@ -522,7 +521,6 @@ const OrthologsTrack = (HGC, ...args) => {
             nextCodonLength = exonEnd - codonStart;
             codonLengthCorrection = 3 - nextCodonLength;
             codonStartAndLength = [codonStart, exonEnd - codonStart, codonId];
-            //nextCodonLength = codonLengthCorrection;
           } else {
             nextCodonLength = 3;
             codonLengthCorrection = 0;
@@ -536,13 +534,11 @@ const OrthologsTrack = (HGC, ...args) => {
 
       if (strand === "-") {
         // we have to reverse the order again and shift the start position
-        const numCodons = codonStartsAndLengths.length;
         const adjustedStartsAndLengths = codonStartsAndLengths.map((sl) => [
           -1 * sl[0] - sl[1],
           sl[1],
           sl[2],
         ]);
-        //console.log(adjustedStartsAndLengths);
         return adjustedStartsAndLengths;
       }
 
@@ -554,7 +550,7 @@ const OrthologsTrack = (HGC, ...args) => {
      * changed
      */
     rerender(options, force) {
-      //console.log("rerender");
+
       const strOptions = JSON.stringify(options);
       if (!force && strOptions === this.prevOptions) return;
 
@@ -601,11 +597,16 @@ const OrthologsTrack = (HGC, ...args) => {
 
       const codonWidth = this._xScale(3) - this._xScale(0);
 
+      const exonRects = this.getVisibleExonRects(tile);
+
       if (Object.keys(tile.sequenceData).length === 0) {
-        this.renderExons(tile);
+        this.renderExons(tile, exonRects);
       } else if (codonWidth < this.fontSize) {
         this.renderCondensedView(tile);
       }
+
+      tile.allExonsForMouseOver = this.generateMouseOverRects(exonRects);
+      tile.allGapsForMouseOver = [];
 
       this.renderMask(tile);
 
@@ -639,6 +640,7 @@ const OrthologsTrack = (HGC, ...args) => {
       tile.aminoAcidTextGraphics.removeChildren();
       tile.gapsGraphics.clear();
       tile.gapsGraphics.removeChildren();
+      tile.allGapsForMouseOver = [];
 
       const codonWidth = this._xScale(3) - this._xScale(0);
       if (codonWidth < this.fontSize && tile.isRerenderNecessary) {
@@ -674,17 +676,20 @@ const OrthologsTrack = (HGC, ...args) => {
 
         tile.gapsData[species].forEach((gap) => {
           if (gap.position >= visibleMinX && gap.position <= visibleMaxX) {
-
             const drawX = this._xScale(gap.position);
             gapsGraphics.drawRect(drawX - 1, yOffset, 2, totalRowHeight);
 
             // if there is enough space, show the gap numbers
-            if(codonWidth > 2.2*this.gapTexts["maxWidth"]){
+            if (codonWidth > 2.2 * this.gapTexts["maxWidth"]) {
               gap.sprite.position.x = drawX + 3;
               gap.sprite.position.y = yMiddle - gap.letterHeight / 2;
               gapsGraphics.addChild(gap.sprite);
             }
-            
+
+            tile.allGapsForMouseOver.push({
+              gap: gap,
+              rect: [drawX - 3, drawX + 3, yOffset, yOffset + totalRowHeight]
+            })
           }
         });
 
@@ -711,10 +716,12 @@ const OrthologsTrack = (HGC, ...args) => {
       });
     }
 
-    // This renders the transcript only
-    renderExons(tile) {
+    // Gets the visible exon rectangles with color (for the zoomed out view and mouseOver)
+    getVisibleExonRects(tile){
+
       const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
       const transcripts = tile.tileData;
+      const exonRects = [];
 
       transcripts.forEach((transcript) => {
         const transcriptInfo = transcript.fields;
@@ -722,7 +729,11 @@ const OrthologsTrack = (HGC, ...args) => {
 
         const transcriptId = this.transcriptId(transcriptInfo);
 
-        if (!this.transcriptInfo[transcriptId]["showTranscript"]) return;
+        if (
+          !this.transcriptInfo[transcriptId] ||
+          !this.transcriptInfo[transcriptId]["showTranscript"]
+        )
+          return;
 
         const exonStarts = this.transcriptInfo[transcriptId]["exonStarts"];
         const exonEnds = this.transcriptInfo[transcriptId]["exonEnds"];
@@ -762,8 +773,6 @@ const OrthologsTrack = (HGC, ...args) => {
         const rectHeight =
           this.activeSpecies.length * (this.rowHeight + this.rowSpacing);
 
-        const exonRects = [];
-
         // draw the actual exons
         for (let j = 0; j < exonOffsetStarts.length; j++) {
           const exonStart = exonOffsetStarts[j];
@@ -795,16 +804,37 @@ const OrthologsTrack = (HGC, ...args) => {
               ? Math.min(xStart + localWidth, xEndPos)
               : Math.max(xStart + localWidth, xStartPos);
 
-          exonRects.push([rectStartX, 0, rectEndX - rectStartX, rectHeight]);
+          // W
+          exonRects.push({
+            color: this.colors[strand + "1"],
+            transcriptId: transcriptId,
+            rect: [rectStartX, 0, rectEndX - rectStartX, rectHeight]
+          })
         }
 
-        // Draw Everything
-        const color1 = this.colors[strand + "1"];
-        tile.rectGraphics.beginFill(color1);
-        for (var i = 0, len = exonRects.length; i < len; i++) {
-          tile.rectGraphics.drawRect(...exonRects[i]);
-        }
       });
+      return exonRects;
+    }
+
+    // This renders the transcript only
+    // exonRects is the result of getVisibleExonRects(tile)
+    renderExons(tile, exonRects) {
+      exonRects.forEach((exonRect) => {
+        // Draw Everything
+        tile.rectGraphics.beginFill(exonRect.color);
+        tile.rectGraphics.drawRect(...exonRect.rect);
+      });
+    }
+
+    // exonRects is the result of getVisibleExonRects(tile)
+    generateMouseOverRects(exonRects){
+      const exonRectsMouseOver = exonRects.map((exonRect) => {
+        const rect = exonRect.rect;
+        const exonRectMod = exonRect;
+        exonRectMod.rect = [rect[0], rect[0] + rect[2], rect[1], rect[1] + rect[3]];
+        return exonRectMod;
+      });
+      return exonRectsMouseOver;
     }
 
     renderCondensedView(tile) {
@@ -874,7 +904,7 @@ const OrthologsTrack = (HGC, ...args) => {
         maxLabelWidth = Math.max(maxLabelWidth, sp.label.width);
       });
 
-      this.pForeground.beginFill(this.colors['white']);
+      this.pForeground.beginFill(this.colors["white"]);
       this.pForeground.drawRect(
         0,
         0,
@@ -938,7 +968,65 @@ const OrthologsTrack = (HGC, ...args) => {
       return [tileMinX, tileMaxX];
     }
 
+    isPointInRectangle(rect, point) {
+      if (
+        rect[0] < point[0] &&
+        rect[1] > point[0] &&
+        rect[2] < point[1] &&
+        rect[3] > point[1]
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     getMouseOverHtml(trackX, trackY) {
+
+      if (!this.tilesetInfo) {
+        return "";
+      }
+
+      const point = [trackX, trackY];
+
+      for (const tile of this.visibleAndFetchedTiles()) {
+
+        // We first check if the mouse is over a gap
+        // tile.allGapsForMouseOver.push({
+        //   gap: gap,
+        //   rect: [drawX - 2, drawX + 2, yOffset, yOffset + totalRowHeight]
+        // })
+        for (let i = 0; i < tile.allGapsForMouseOver.length; i++) {
+          const rect = tile.allGapsForMouseOver[i].rect;
+          const gap = tile.allGapsForMouseOver[i].gap;
+          if (this.isPointInRectangle(rect, point)) {
+            return `
+                <div>
+                  <div><b>${gap.seq}</b></div>
+                </div>
+              `;
+          }
+        }
+
+
+        for (let i = 0; i < tile.allExonsForMouseOver.length; i++) {
+          const rect = tile.allExonsForMouseOver[i].rect;
+          
+          if (this.isPointInRectangle(rect, point)) {
+            const transcriptId = tile.allExonsForMouseOver[i].transcriptId;
+            const transcript = this.transcriptInfo[transcriptId];
+
+            return `
+                <div>
+                  <div><b>Transcript: ${transcript.transcriptName}</b></div>
+                  <div>Position: ${transcript.chromName}:${transcript.txStart}-${transcript.txEnd}</div>
+                  <div>Strand: ${transcript.strand}</div>
+                </div>
+              `;
+          }
+        }
+      }
+
+
       return "";
     }
   }
