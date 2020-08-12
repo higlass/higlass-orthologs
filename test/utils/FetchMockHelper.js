@@ -67,6 +67,7 @@ class FetchMockHelper {
       // Check if all the requested data is already mocked
       let isAllDataMocked = true;
       requestIds.forEach((id) => {
+
         if (this.mockedData[id] === undefined) {
           isAllDataMocked = false;
         }
@@ -94,6 +95,7 @@ class FetchMockHelper {
   }
 
   addToMockedData(response, customId, requestIds) {
+
     if (customId === null) {
       // console.warn(ids);
       for (const id of requestIds) {
