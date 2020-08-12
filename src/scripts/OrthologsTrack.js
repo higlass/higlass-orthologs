@@ -1,4 +1,5 @@
 import EnsemblHelper from "./EnsemblHelper";
+import slugid from "slugid";
 
 const OrthologsTrack = (HGC, ...args) => {
   if (!new.target) {
@@ -359,6 +360,7 @@ const OrthologsTrack = (HGC, ...args) => {
                   codonLength: cs[1],
                   letterWidth: 0,
                   letterHeight: 0,
+                  letter: "", // used in svg export
                   sprite: null,
                   match: false,
                   strand: null,
@@ -434,6 +436,7 @@ const OrthologsTrack = (HGC, ...args) => {
                   codonLength: codonLength,
                   letterWidth: aaText.width,
                   letterHeight: aaText.height,
+                  letter: letter,
                   sprite: pixiSprite,
                   match: doesMatchWithHuman,
                   strand: tInfo.strand,
@@ -550,7 +553,6 @@ const OrthologsTrack = (HGC, ...args) => {
      * changed
      */
     rerender(options, force) {
-
       const strOptions = JSON.stringify(options);
       if (!force && strOptions === this.prevOptions) return;
 
@@ -688,8 +690,8 @@ const OrthologsTrack = (HGC, ...args) => {
 
             tile.allGapsForMouseOver.push({
               gap: gap,
-              rect: [drawX - 3, drawX + 3, yOffset, yOffset + totalRowHeight]
-            })
+              rect: [drawX - 3, drawX + 3, yOffset, yOffset + totalRowHeight],
+            });
           }
         });
 
@@ -717,8 +719,7 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     // Gets the visible exon rectangles with color (for the zoomed out view and mouseOver)
-    getVisibleExonRects(tile){
-
+    getVisibleExonRects(tile) {
       const [tileMinX, tileMaxX] = this.getBoundsOfTile(tile);
       const transcripts = tile.tileData;
       const exonRects = [];
@@ -808,10 +809,9 @@ const OrthologsTrack = (HGC, ...args) => {
           exonRects.push({
             color: this.colors[strand + "1"],
             transcriptId: transcriptId,
-            rect: [rectStartX, 0, rectEndX - rectStartX, rectHeight]
-          })
+            rect: [rectStartX, 0, rectEndX - rectStartX, rectHeight],
+          });
         }
-
       });
       return exonRects;
     }
@@ -827,11 +827,16 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     // exonRects is the result of getVisibleExonRects(tile)
-    generateMouseOverRects(exonRects){
+    generateMouseOverRects(exonRects) {
       const exonRectsMouseOver = exonRects.map((exonRect) => {
         const rect = exonRect.rect;
         const exonRectMod = exonRect;
-        exonRectMod.rect = [rect[0], rect[0] + rect[2], rect[1], rect[1] + rect[3]];
+        exonRectMod.rect = [
+          rect[0],
+          rect[0] + rect[2],
+          rect[1],
+          rect[1] + rect[3],
+        ];
         return exonRectMod;
       });
       return exonRectsMouseOver;
@@ -981,7 +986,6 @@ const OrthologsTrack = (HGC, ...args) => {
     }
 
     getMouseOverHtml(trackX, trackY) {
-
       if (!this.tilesetInfo) {
         return "";
       }
@@ -989,7 +993,6 @@ const OrthologsTrack = (HGC, ...args) => {
       const point = [trackX, trackY];
 
       for (const tile of this.visibleAndFetchedTiles()) {
-
         // We first check if the mouse is over a gap
         // tile.allGapsForMouseOver.push({
         //   gap: gap,
@@ -1007,10 +1010,9 @@ const OrthologsTrack = (HGC, ...args) => {
           }
         }
 
-
         for (let i = 0; i < tile.allExonsForMouseOver.length; i++) {
           const rect = tile.allExonsForMouseOver[i].rect;
-          
+
           if (this.isPointInRectangle(rect, point)) {
             const transcriptId = tile.allExonsForMouseOver[i].transcriptId;
             const transcript = this.transcriptInfo[transcriptId];
@@ -1026,8 +1028,191 @@ const OrthologsTrack = (HGC, ...args) => {
         }
       }
 
-
       return "";
+    }
+
+    exportSVG() {
+      let track = null;
+      let base = null;
+
+      base = document.createElement("g");
+      track = base;
+
+      const clipPathId = slugid.nice();
+
+      const gClipPath = document.createElement("g");
+      gClipPath.setAttribute("style", `clip-path:url(#${clipPathId});`);
+
+      track.appendChild(gClipPath);
+
+      // define the clipping area as a polygon defined by the track's
+      // dimensions on the canvas
+      const clipPath = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "clipPath"
+      );
+      clipPath.setAttribute("id", clipPathId);
+      track.appendChild(clipPath);
+
+      const clipPolygon = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "polygon"
+      );
+      clipPath.appendChild(clipPolygon);
+
+      clipPolygon.setAttribute(
+        "points",
+        `${this.position[0]},${this.position[1]} ` +
+          `${this.position[0] + this.dimensions[0]},${this.position[1]} ` +
+          `${this.position[0] + this.dimensions[0]},${
+            this.position[1] + this.dimensions[1]
+          } ` +
+          `${this.position[0]},${this.position[1] + this.dimensions[1]} `
+      );
+
+      const output = document.createElement("g");
+
+      output.setAttribute(
+        "transform",
+        `translate(${this.position[0]},${this.position[1]})`
+      );
+
+      gClipPath.appendChild(output);
+
+      const totalRowHeight = this.rowHeight + this.rowSpacing;
+      const codonWidth = this._xScale(3) - this._xScale(0);
+
+      this.visibleAndFetchedTiles()
+        .filter((tile) => Object.keys(tile.sequenceData).length > 0)
+        .forEach((tile) => {
+          const gTile = document.createElement("g");
+          gTile.setAttribute(
+            "transform",
+            `translate(${tile.aminoAcidTextGraphics.position.x},
+            ${tile.aminoAcidTextGraphics.position.y})
+            scale(${tile.aminoAcidTextGraphics.scale.x},
+            ${tile.aminoAcidTextGraphics.scale.y})`
+          );
+
+          this.activeSpecies.forEach((as) => {
+            const yOffset = as.yPosOffset;
+            const yMiddle = yOffset + totalRowHeight / 1;
+            const species = as.species;
+
+            if (codonWidth >= this.fontSize) {
+              tile.gapsData[species].forEach((gap) => {
+                const g = document.createElement("g");
+                const p = document.createElement("path");
+                const d = `M 0 0 H ${2} V ${this.rowHeight} H 0 Z`;
+                p.setAttribute("d", d);
+                p.setAttribute("fill", "orange");
+                p.setAttribute("opacity", "1");
+                g.appendChild(p);
+                g.setAttribute(
+                  "transform",
+                  `translate(${this._xScale(gap.position)},${
+                    yOffset + 0.5 * totalRowHeight - this.rowSpacing
+                  })scale(1,1)`
+                );
+                gTile.appendChild(g);
+              });
+
+              tile.sequenceData[species].forEach((aa) => {
+                const g = document.createElement("g");
+                const t = document.createElement("text");
+                t.setAttribute("text-anchor", "middle");
+                t.setAttribute("font-family", this.options.fontFamily);
+                t.setAttribute("font-size", `${this.fontSize}px`);
+
+                if (aa.match) {
+                  t.setAttribute("font-weight", "bold");
+                }
+
+                t.innerHTML = aa.letter;
+
+                g.appendChild(t);
+                g.setAttribute(
+                  "transform",
+                  `translate(${
+                    this._xScale(aa.start) + codonWidth / 2
+                  },${yMiddle})scale(1,1)`
+                );
+                gTile.appendChild(g);
+              });
+            } else {
+              // condensed view
+
+              tile.sequenceData[species].forEach((aa) => {
+                if (!aa.match) return;
+
+                const g = document.createElement("g");
+                const p = document.createElement("path");
+                const width = (codonWidth * aa.codonLength) / 3;
+                const d = `M 0 0 H ${width} V ${this.rowHeight} H 0 Z`;
+                p.setAttribute("d", d);
+                if (aa.strand === "+") {
+                  p.setAttribute("fill", this.options.plusStrandColorDark);
+                  p.setAttribute("stroke", this.options.plusStrandColorDark);
+                } else {
+                  p.setAttribute("fill", this.options.minusStrandColorDark);
+                  p.setAttribute("stroke", this.options.minusStrandColorDark);
+                }
+                p.setAttribute("opacity", "1");
+                g.appendChild(p);
+
+                g.setAttribute(
+                  "transform",
+                  `translate(${this._xScale(aa.start)},${
+                    yOffset + 0.5 * totalRowHeight - this.rowSpacing
+                  })scale(1,1)`
+                );
+                gTile.appendChild(g);
+              });
+            }
+          });
+          output.appendChild(gTile);
+        });
+
+      // Labels
+      const totalHeight =
+        this.activeSpecies.length * (this.rowHeight + this.rowSpacing) + 5;
+      let maxLabelWidth = 0;
+
+      this.activeSpecies.forEach((sp) => {
+        maxLabelWidth = Math.max(maxLabelWidth, sp.label.width + 1);
+      });
+
+      const gLabelBackground = document.createElement("g");
+      const rLabelBackground = document.createElement("path");
+      const dLabelBackground = `M 0 0 H ${maxLabelWidth} V ${totalHeight} H 0 Z`;
+      rLabelBackground.setAttribute("d", dLabelBackground);
+      rLabelBackground.setAttribute("fill", "white");
+      rLabelBackground.setAttribute("opacity", "1");
+      gLabelBackground.appendChild(rLabelBackground);
+      output.appendChild(gLabelBackground);
+
+      this.activeSpecies.forEach((sp, i) => {
+        const g = document.createElement("g");
+        const t = document.createElement("text");
+        t.setAttribute("text-anchor", "start");
+        t.setAttribute("font-family", this.options.fontFamily);
+        t.setAttribute("font-size", `${this.fontSize}px`);
+        t.setAttribute("font-weight", "bold");
+
+        g.setAttribute("transform", `scale(1,1)`);
+
+        t.setAttribute("fill", this.options.labelTextColor);
+        t.innerHTML = sp.label.text.text;
+
+        g.appendChild(t);
+        g.setAttribute(
+          "transform",
+          `translate(0,${sp.yPosOffset + totalRowHeight})scale(1,1)`
+        );
+        output.appendChild(g);
+      });
+
+      return [base, base];
     }
   }
   return new OrthologsTrackClass(...args);
@@ -1088,6 +1273,12 @@ OrthologsTrack.config = {
     minusStrandColorDark: "#fabec2",
     gapsColor: "#eb9c00",
   },
+  // optionsInfo: {
+  //   labelTextColor: {
+  //     name: "My track specific option",
+  //     value: "#888888"
+  //   }
+  // }
 };
 
 export default OrthologsTrack;
