@@ -312,12 +312,14 @@ class EnsemblHelper {
 
             // we have to treat the human seq separately, since it is not present in the homologies array
             if(i === 0){
-              const refSeq = humanSeq.replace("-","").split("").map((s) => {
+              // Replace all occurences of -
+              const refSeq = humanSeq.replace(/-/g,"").split("").map((s) => {
                 return {
                   aa: s,
                   match: true,
                 }
               });
+
               speciesSeqData["human"] = {
                 gaps: Array.from({length: refSeq.length}, (v, i) => ""),
                 seq: refSeq,
