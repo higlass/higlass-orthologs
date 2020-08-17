@@ -108,10 +108,10 @@ const OrthologsTrack = (HGC, ...args) => {
       this.colors["lightgrey"] = colorToHex("#ededed");
       this.colors["+1"] = colorToHex(this.options.plusStrandColor1);
       this.colors["+2"] = colorToHex(this.options.plusStrandColor2);
-      this.colors["+dark"] = colorToHex(this.options.plusStrandColorDark);
+      this.colors["+dark"] = colorToHex(this.options.plusStrandColorZoomedOut);
       this.colors["-1"] = colorToHex(this.options.minusStrandColor1);
       this.colors["-2"] = colorToHex(this.options.minusStrandColor2);
-      this.colors["-dark"] = colorToHex(this.options.minusStrandColorDark);
+      this.colors["-dark"] = colorToHex(this.options.minusStrandColorZoomedOut);
       this.colors["gapsColor"] = colorToHex(this.options.gapsColor);
       this.colors["aaColor"] = colorToHex(this.options.aminoAcidColor);
       this.colors["aaColorNoMatch"] = colorToHex(
@@ -1151,11 +1151,11 @@ const OrthologsTrack = (HGC, ...args) => {
                 const d = `M 0 0 H ${width} V ${this.rowHeight} H 0 Z`;
                 p.setAttribute("d", d);
                 if (aa.strand === "+") {
-                  p.setAttribute("fill", this.options.plusStrandColorDark);
-                  p.setAttribute("stroke", this.options.plusStrandColorDark);
+                  p.setAttribute("fill", this.options.plusStrandColorZoomedOut);
+                  p.setAttribute("stroke", this.options.plusStrandColorZoomedOut);
                 } else {
-                  p.setAttribute("fill", this.options.minusStrandColorDark);
-                  p.setAttribute("stroke", this.options.minusStrandColorDark);
+                  p.setAttribute("fill", this.options.minusStrandColorZoomedOut);
+                  p.setAttribute("stroke", this.options.minusStrandColorZoomedOut);
                 }
                 p.setAttribute("opacity", "1");
                 g.appendChild(p);
@@ -1229,31 +1229,35 @@ OrthologsTrack.config = {
   orientation: "1d-horizontal",
   thumbnail: new DOMParser().parseFromString(icon, "text/xml").documentElement,
   availableOptions: [
-    "labelTextColor",
-    "trackBorderColor",
-    "backgroundColor",
+    "aminoAcidColor",
+    "aminoAcidColorNoMatch",
     "fontSize",
     "fontFamily",
-    "fontColor",
+    "gapsColor",
+    "labelTextColor",
+    "minusStrandColor1",
+    "minusStrandColor2",
+    "minusStrandColorZoomedOut",
+    "plusStrandColor1",
+    "plusStrandColor2",
+    "plusStrandColorZoomedOut",
     "rowHeight",
     "rowSpacing",
     "species",
-    "plusStrandColor1",
-    "plusStrandColor2",
-    "plusStrandColorDark",
-    "minusStrandColor1",
-    "minusStrandColor2",
-    "minusStrandColorDark",
   ],
   defaultOptions: {
-    labelTextColor: "#888888",
     aminoAcidColor: "#333333",
     aminoAcidColorNoMatch: "#b0b0b0",
-    trackBorderColor: "white",
-    backgroundColor: "white",
     fontSize: 10,
     fontFamily: "Arial",
-    fontColor: "white",
+    gapsColor: "#eb9c00",
+    labelTextColor: "#888888",
+    minusStrandColor1: "#ffe0e2",
+    minusStrandColor2: "#fff0f1",
+    minusStrandColorZoomedOut: "#fabec2",
+    plusStrandColor1: "#ebebff",
+    plusStrandColor2: "#dedeff",
+    plusStrandColorZoomedOut: "#bdbfff",
     rowHeight: 11,
     rowSpacing: 2,
     species: [
@@ -1265,20 +1269,7 @@ OrthologsTrack.config = {
       "chicken",
       "zebrafish",
     ],
-    plusStrandColor1: "#ebebff",
-    plusStrandColor2: "#dedeff",
-    plusStrandColorDark: "#bdbfff",
-    minusStrandColor1: "#ffe0e2",
-    minusStrandColor2: "#fff0f1",
-    minusStrandColorDark: "#fabec2",
-    gapsColor: "#eb9c00",
   },
-  // optionsInfo: {
-  //   labelTextColor: {
-  //     name: "My track specific option",
-  //     value: "#888888"
-  //   }
-  // }
 };
 
 export default OrthologsTrack;

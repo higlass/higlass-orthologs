@@ -11,9 +11,9 @@ import math
 import collections as col
 import json
 
-filepath = "canonical_transcripts.txt"
+filepath = "canonical_transcripts_20200814.txt"
 #filepath = "gene_table_v2_transcripts_names_new.txt"
-output_file = "canonical_transcripts_20200729.beddb"
+output_file = "canonical_transcripts_20200814.beddb"
 #output_file = "transcripts_20200723_3.beddb"
 importance_column = 5
 has_header = False
@@ -21,7 +21,8 @@ chromosome = None
 max_transcripts_per_tile = 5
 tile_size = 1024
 delimiter = '\t'
-chromsizes_filename = 'chromInfo_hg38.txt'
+#chromsizes_filename = 'chromInfo_hg38.txt'
+chromsizes_filename = 'hg38_full.txt'
 offset = 0
 
 

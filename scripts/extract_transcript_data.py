@@ -5,13 +5,13 @@ import random
 
 # Input/Output file names (need to be in same folder)
 # Gencode file
-gencode_file = 'gencode.v34.annotation.gtf'
+gencode_file = 'gencode.v29.annotation.gtf'
 # Gencode file
 known_canonical = 'knownCanonical.txt'
 # Chromosome file
-chr_file = 'chromInfo_hg38.txt'
+chr_file = 'hg38_full.txt'
 # Output file
-output_file = 'canonical_transcripts.txt'
+output_file = 'canonical_transcripts_20200814.txt'
 
 
 # Read known canonicals
