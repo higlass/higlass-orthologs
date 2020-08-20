@@ -1,4 +1,4 @@
-# Gene orthologs for HiGlass - Under development
+# Gene orthologs for HiGlass
 
 Display orthologous amino acids in HiGlass!
 
