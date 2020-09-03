@@ -678,7 +678,7 @@ const OrthologsTrack = (HGC, ...args) => {
 
         tile.gapsData[species].forEach((gap) => {
           if (gap.position >= visibleMinX && gap.position <= visibleMaxX) {
-            const drawX = this._xScale(gap.position);
+            const drawX = this._xScale(gap.position + 1);
             gapsGraphics.drawRect(drawX - 1, yOffset, 2, totalRowHeight);
 
             // if there is enough space, show the gap numbers
@@ -697,11 +697,11 @@ const OrthologsTrack = (HGC, ...args) => {
 
         tile.sequenceData[species].forEach((aa) => {
           if (aa.start >= visibleMinX && aa.start <= visibleMaxX) {
-            const xMiddle = this._xScale(aa.start + aa.codonLength / 2);
+            const xMiddle = this._xScale(aa.start + aa.codonLength / 2 + 1);
             graphics.beginFill(aa.backgroundColor);
             const width = (codonWidth * aa.codonLength) / 3;
             graphics.drawRect(
-              this._xScale(aa.start),
+              this._xScale(aa.start + 1),
               yOffset,
               width,
               totalRowHeight
@@ -768,8 +768,8 @@ const OrthologsTrack = (HGC, ...args) => {
         exonOffsetStarts.sort();
         exonOffsetEnds.sort();
 
-        const xStartPos = this._xScale(txStart);
-        const xEndPos = this._xScale(txEnd);
+        const xStartPos = this._xScale(txStart + 1);
+        const xEndPos = this._xScale(txEnd + 1);
 
         const rectHeight =
           this.activeSpecies.length * (this.rowHeight + this.rowSpacing);
@@ -790,10 +790,10 @@ const OrthologsTrack = (HGC, ...args) => {
 
           if (isUtr) continue;
 
-          const xStart = this._xScale(exonStart);
+          const xStart = this._xScale(exonStart + 1);
           const localWidth = Math.max(
             1,
-            this._xScale(exonEnd) - this._xScale(exonStart)
+            this._xScale(exonEnd + 1) - this._xScale(exonStart + 1)
           );
 
           const rectStartX =
@@ -889,7 +889,7 @@ const OrthologsTrack = (HGC, ...args) => {
               tile.rectGraphics.beginFill(colorUsed);
               const width = (codonWidth * aa.codonLength) / 3;
               tile.rectGraphics.drawRect(
-                this._xScale(aa.start),
+                this._xScale(aa.start + 1),
                 yOffset,
                 width,
                 totalRowHeight
@@ -1110,7 +1110,7 @@ const OrthologsTrack = (HGC, ...args) => {
                 g.appendChild(p);
                 g.setAttribute(
                   "transform",
-                  `translate(${this._xScale(gap.position)},${
+                  `translate(${this._xScale(gap.position + 1)},${
                     yOffset + 0.5 * totalRowHeight - this.rowSpacing
                   })scale(1,1)`
                 );
@@ -1134,7 +1134,7 @@ const OrthologsTrack = (HGC, ...args) => {
                 g.setAttribute(
                   "transform",
                   `translate(${
-                    this._xScale(aa.start) + codonWidth / 2
+                    this._xScale(aa.start + 1) + codonWidth / 2
                   },${yMiddle})scale(1,1)`
                 );
                 gTile.appendChild(g);
@@ -1162,7 +1162,7 @@ const OrthologsTrack = (HGC, ...args) => {
 
                 g.setAttribute(
                   "transform",
-                  `translate(${this._xScale(aa.start)},${
+                  `translate(${this._xScale(aa.start + 1)},${
                     yOffset + 0.5 * totalRowHeight - this.rowSpacing
                   })scale(1,1)`
                 );

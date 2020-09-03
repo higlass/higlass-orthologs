@@ -15,6 +15,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-bootstrap/0.32.1/react-bootstrap.min.js"></script>
+  <script crossorigin src="https://unpkg.com/higlass-transcripts/dist/higlass-transcripts.js"></script>
 </head>
 <body>
 Higlass orthologs track
@@ -69,6 +70,38 @@ And some other text
             },
             "width": 20,
             "height": 90
+          },
+          {
+            "server": "http://ec2-3-231-224-18.compute-1.amazonaws.com/api/v1",
+            "tilesetUid": "transcripts_hg38",
+            "uid": "transcript_annotation",
+            "type": "horizontal-transcripts",
+            "options": {
+              "fontSize": 9,
+              "labelFontColor": "#222222",
+              "labelBackgroundColor": "#e9e9e9",
+              "minHeight": 24,
+              "plusStrandColor": "#bdbfff",
+              "minusStrandColor": "#fabec2",
+              "utrColor": "#C0EAAF",
+              "mousePositionColor": "#000000",
+              "transcriptHeight": 12,
+              "transcriptSpacing": 2,
+              "name": "Gene transcripts",
+              "fontFamily": "Helvetica",
+              "maxTexts": 100,
+              "showToggleTranscriptsButton": true,
+              "trackHeightAdjustment": "automatic",
+              "startCollapsed": false,
+              "sequenceData": {
+                "type": "fasta",
+                "fastaUrl": "https://aveit.s3.amazonaws.com/higlass/data/sequence/hg38.fa",
+                "faiUrl": "https://aveit.s3.amazonaws.com/higlass/data/sequence/hg38.fa.fai",
+                "chromSizesUrl": "https://aveit.s3.amazonaws.com/higlass/data/sequence/hg38.mod.chrom.sizes"
+              }
+            },
+            "width": 768,
+            "height": 134
           },
           {
             "server": "http://higlass.io/api/v1",
@@ -135,6 +168,8 @@ And some other text
         // 34795152.46709586
         35798143.83768864,
         35859692.193265945
+        // 1667973798.9629378,
+        // 1667973939.1068017
       ],
       "initialYDomain": [
         -2681066463.2605443,
