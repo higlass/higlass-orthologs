@@ -45,7 +45,7 @@
    "name": "GJA4-201"
   }
  ],
- "http://rest.ensembl.org/homology/id/ENSG00000187513?type=orthologues&content-type=application/json&cigar_line=0&target_species=human&target_species=macaca_mulatta&target_species=mouse&target_species=dog&target_species=elephant&target_species=chicken&target_species=zebrafish": {
+ "https://rest.ensembl.org/homology/id/ENSG00000187513?type=orthologues&content-type=application/json&cigar_line=0&target_species=human&target_species=macaca_mulatta&target_species=mouse&target_species=dog&target_species=elephant&target_species=chicken&target_species=zebrafish": {
   "data": [
    {
     "homologies": [

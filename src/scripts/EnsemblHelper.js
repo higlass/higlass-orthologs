@@ -271,7 +271,7 @@ class EnsemblHelper {
 
   getSpeciesSequencesFromEnsembl(geneId, transcriptId, species) {
     // Example request URL
-    // http://rest.ensembl.org/homology/id/ENSG00000139618?type=orthologues&content-type=application/json&cigar_line=0&target_species=cat&target_species=dog
+    // https://rest.ensembl.org/homology/id/ENSG00000139618?type=orthologues&content-type=application/json&cigar_line=0&target_species=cat&target_species=dog
     // We can't only load the cigar line, because we need the actual sequence of the species -
     // not only they they match with the human or not.
 
@@ -282,7 +282,7 @@ class EnsemblHelper {
     });
 
     const url =
-      "http://rest.ensembl.org/homology/id/" +
+      "https://rest.ensembl.org/homology/id/" +
       geneId +
       "?type=orthologues&content-type=application/json&cigar_line=0" +
       speciesParam;
