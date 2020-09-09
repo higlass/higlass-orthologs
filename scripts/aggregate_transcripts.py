@@ -11,9 +11,9 @@ import math
 import collections as col
 import json
 
-filepath = "canonical_transcripts_20200814.txt"
+filepath = "canonical_transcripts_20200909.txt"
 #filepath = "gene_table_v2_transcripts_names_new.txt"
-output_file = "canonical_transcripts_20200814.beddb"
+output_file = "canonical_transcripts_20200909.beddb"
 #output_file = "transcripts_20200723_3.beddb"
 importance_column = 5
 has_header = False

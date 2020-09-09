@@ -339,6 +339,9 @@ const OrthologsTrack = (HGC, ...args) => {
         });
 
         visibleTranscripts.forEach((transcriptId) => {
+
+          if (!this.transcriptInfo[transcriptId]) return;
+
           const tInfo = this.transcriptInfo[transcriptId];
           const seqData = tInfo.sequenceData;
 

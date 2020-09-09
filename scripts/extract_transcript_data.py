@@ -2,25 +2,23 @@ from gtfparse import read_gtf
 import gzip
 import csv
 import random
+import json
 
 # Input/Output file names (need to be in same folder)
 # Gencode file
-gencode_file = 'gencode.v29.annotation.gtf'
-# Gencode file
-known_canonical = 'knownCanonical.txt'
+gencode_file = 'gencode.v34.annotation.gtf'
+# Output of get_relevant_transcripts.py
+relevant_transcripts_file = 'relevant_transcripts.txt'
 # Chromosome file
 chr_file = 'hg38_full.txt'
 # Output file
-output_file = 'canonical_transcripts_20200814.txt'
+output_file = 'canonical_transcripts_20200909.txt'
 
 
-# Read known canonicals
-with open(known_canonical, 'r') as opf:
-    kc = opf.readlines()
+with open(relevant_transcripts_file, 'r') as filehandle:
+    relevant_transcripts = json.load(filehandle)
 
-known_canonicals = [i.split('\t')[4] for i in kc]
 
-# print(known_canonicals)
 
 # exit()
 # print("exit")
@@ -50,7 +48,14 @@ chrms = [i.split('\t')[0] for i in chrsizes]
 for i, v in df.iterrows():
     if i % 5000 == 0:
         print("Progress: ", str(i),"/", str(total_entries))
-    if (v['gene_type'] == 'protein_coding') and (v['transcript_type'] == 'protein_coding') and (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon') and (v['transcript_id'] in known_canonicals):
+        
+    if (v['gene_type'] == 'protein_coding') and \
+        (v['transcript_type'] == 'protein_coding') and \
+        (v['feature'] == 'transcript' or v['feature'] == 'exon' or v['feature'] == 'CDS' or v['feature'] == 'start_codon' or v['feature'] == 'stop_codon') and \
+        (v['transcript_id'].split('.')[0] in relevant_transcripts):
+
+        #print(v['transcript_id'])
+
         if v['gene_id'] not in data:
             data[v['gene_id']] = {}
 
@@ -73,7 +78,7 @@ for i, v in df.iterrows():
                 'StopCodonStart': '.'}
 
         if v['feature'] == 'transcript':
-            print(v['transcript_id'])
+            # print(v['transcript_id'])
             data[v['gene_id']][v['transcript_id']]['chr'] = v['seqname']
             data[v['gene_id']][v['transcript_id']]['start'] = v['start']
             data[v['gene_id']][v['transcript_id']]['end'] = v['end']
