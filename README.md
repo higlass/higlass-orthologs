@@ -24,10 +24,18 @@ npm install higlass-orthologs
 
 ## Data preparation
 
-To extract canonical trancripts from a Gencode GTF file, the following script can be used (make sure to adjust the file names in the script). Besides the chrom sizes file, a list of known canonical transcripts is needed (see http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ or in the `examples` folder)
+The orthologs data is loaded from Ensembl via their Rest API in the client (example URL: https://rest.ensembl.org/homology/id/ENSG00000139618?type=orthologues&content-type=application/json&cigar_line=0&target_species=cat&target_species=dog). In order to determine where to display the individual amino acids in the track, we need to know the representative (human) transcript that was used to create the aligned sequences. The sequences from Ensembl are then distributed onto the exons of that transcript.
+
+In order to obtain the representative sequences we use Ensemble Biomart (https://m.ensembl.org/biomart) with the following attributes:
+
+![Biomart](https://aveit.s3.amazonaws.com/higlass/static/Ensembl-biomart-settings.png)
+
+The "Query protein or transcript ID" fields contain the information to identify the correct transcript that we need to use in the track. Store this data to a file and run
+
 ```
-python /scripts/extract_transcript_data.py
+python /scripts/get_representative_transcripts.py
 ```
+to obtain the `bed` file that will serve as base for the orthologs track.
 
 To create an aggregated `beddb` file from that data, you can use the script
 ```
@@ -38,7 +46,7 @@ An example `beddb` file can be found in the `examples` folder.
 To ingest the data into higlass-server:
 ```
 python manage.py ingest_tileset \
-    --filename /data/canonical_transcripts.beddb \
+    --filename /data/representative_transcripts.beddb \
     --filetype beddb \
     --coordSystem hg38 \
     --datatype gene-annotation \
