@@ -57,7 +57,7 @@ python manage.py ingest_tileset \
 
 The live script can be found at:
 
-- https://unpkg.com/higlass-transcripts/dist/higlass-orthologs.js
+- https://unpkg.com/higlass-orthologs/dist/higlass-orthologs.js
 
 ### Client
 
