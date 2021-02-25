@@ -10,3 +10,4 @@ es
 *.DS_cache
 .idea/
 *.DS_Store
+scripts

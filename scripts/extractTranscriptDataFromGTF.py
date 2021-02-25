@@ -25,7 +25,7 @@ def main():
     )
 
     parser.add_argument("--gtf_file")
-    parser.add_argument("--transcript_bed")
+    # parser.add_argument("--transcript_bed")
     # parser.add_argument('-o', '--options', default='yo',
     # help="Some option", type='str')
     # parser.add_argument('-u', '--useless', action='store_true',
@@ -37,10 +37,11 @@ def main():
     df = read_gtf(args.gtf_file)
 
     # filter DataFrame to gene entries on chrY
-    #df_transcripts = df[df["feature"] == "start_codon"]
+    #df_transcripts = df[df["feature"] == "transcript"]
+    #df_transcripts = df_transcripts[df_transcripts['gene_type'] == 'protein_coding']
     #df_transcripts = df[df["transcript_name"] == "SAMD11-201"]
-    #df_transcripts = df[df["gene_name"] == "PRKCZ"] 
-    df_transcripts = df[df["gene_id"] == "ENSG00000287777.1"]
+    #df_transcripts = df[df["gene_name"] == "AC114490.2-201"] 
+    df_transcripts = df[df["gene_id"] == "ENSG00000163867.17"]
     #df_transcripts = df.head()
     # gene_id = "ENST00000445297"
     # df_transcripts = df[df["transcript_id"].str.contains(gene_id)]
