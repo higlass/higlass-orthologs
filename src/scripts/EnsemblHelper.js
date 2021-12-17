@@ -278,7 +278,7 @@ class EnsemblHelper {
     let speciesParam = "";
 
     species.forEach((s) => {
-      speciesParam += "&target_species=" + s;
+      speciesParam += "&target_species=" + this.speciesMapping[s].ensembleId;
     });
 
     const url =

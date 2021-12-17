@@ -95,9 +95,9 @@ describe("Orthologs test", () => {
   
         const tile = trackObj.visibleAndFetchedTiles()[0];
 
-        const gapsDataChicken = tile.gapsData['chicken'];
-        expect(gapsDataChicken[0].position).to.equal(34794942);
-        expect(gapsDataChicken[0].seq).to.equal("PVPV");
+        //const gapsDataChicken = tile.gapsData['chicken'];
+        //expect(gapsDataChicken[0].position).to.equal(34794942);
+        //expect(gapsDataChicken[0].seq).to.equal("PVPV");
 
         const gapsDataZebrafish = tile.gapsData['zebrafish'];
         expect(gapsDataZebrafish[0].position).to.equal(34794528);
